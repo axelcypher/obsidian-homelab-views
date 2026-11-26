@@ -113,7 +113,7 @@ const KIND_KEYS: Record<NetworkKind, readonly string[]> = {
 	rack: ["units", "site", "shelves"],
 };
 const BASE_KEYS = ["schema", "kind", "name"];
-const HOST_PORT_MSG = "erwartet adresse:port, z. B. 10.8.0.50:443 (IPv6 in eckigen Klammern)";
+const HOST_PORT_MSG = "erwartet adresse:port, z. B. 10.20.0.50:443 (IPv6 in eckigen Klammern)";
 
 export function parseNetwork(value: unknown): ParsedResource[] {
 	return blocksOf(value, "network-flow").map(({ raw, field, index }) => {
@@ -188,7 +188,7 @@ export function validateResource(raw: unknown, c: Checker): NetworkResource {
 		case "subnet": {
 			res.network = c.str(raw, "network", { required: true });
 			if (res.network && !isCidr(res.network)) {
-				c.error("network", `${show(res.network)} ist kein IPv4-Netz in CIDR (z. B. 10.8.0.0/16)`);
+				c.error("network", `${show(res.network)} ist kein IPv4-Netz in CIDR (z. B. 10.20.0.0/16)`);
 				res.network = undefined;
 			}
 			if ("vlan" in raw) {

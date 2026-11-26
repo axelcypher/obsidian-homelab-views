@@ -77,15 +77,12 @@ ${block("b", "    copy-of: j")}`),
 describe("fixtures (example notes)", () => {
 	const idx = buildIndex(fixtureRecords());
 
-	test("the example notes: only Beispiel-App's entry „internal“ breaks the network schema", () => {
+	test("the example notes are valid (errors live in Beispiel-Fehler only)", () => {
 		const byNote = (name) => idx.byNote.get(name);
-		for (const name of ["Beispiel-VM.md", "Beispiel-Gameserver.md"]) {
+		for (const name of ["Beispiel-VM.md", "Beispiel-Gameserver.md", "Beispiel-App.md"]) {
 			const n = byNote(name);
 			assert.deepEqual([...n.backups, ...n.network].flatMap((e) => e.issues), [], name);
 		}
-		const app = byNote("Beispiel-App.md");
-		assert.deepEqual(app.backups.flatMap((e) => e.issues), []);
-		assert.deepEqual(app.network.flatMap((e) => e.issues).map((i) => i.field), ["network-flow[0].hostnames[0].entry"]);
 		assert.equal(idx.backupById.get("beispiel-app-dump-nas").original.block.id, "beispiel-app-dump");
 	});
 

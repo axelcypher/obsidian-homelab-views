@@ -4,27 +4,27 @@ network-flow:
     kind: machine
     name: beispiel-fw
     type: vm
-    host: sol
+    host: pve-01
     addresses:
-      - ip: 10.8.0.1
-        subnet: oxygen
+      - ip: 10.20.0.1
+        subnet: lan
         mac: f6:f6:b0:00:99:01
-      - ip: 10.5.0.1
+      - ip: 10.50.0.1
         subnet: backup
         mac: f6:f6:b0:00:99:01
       - ip: 10.10.0.1
         subnet: beispiel-wg
-    web-interface: 10.8.0.1:8443
+    web-interface: 10.20.0.1:8443
   - schema: 1
     kind: subnet
-    name: oxygen
-    network: 10.8.0.0/16
+    name: lan
+    network: 10.20.0.0/16
     vlan: 8
     medium: LAN
   - schema: 1
     kind: subnet
     name: backup
-    network: 10.5.0.0/24
+    network: 10.50.0.0/24
     vlan: 5
     medium: LAN
   - schema: 1
@@ -42,7 +42,7 @@ backup:
   id: beispiel-fw-config
   system: opnsense
   what: Konfiguration (config.xml)
-  source: {files: "10.2.0.5:/volume1/backup/opnsense", pattern: "config-*.xml"}
+  source: {files: "10.30.0.5:/volume1/backup/opnsense", pattern: "config-*.xml"}
   schedule: {times: ["04:00"]}
   tz: Europe/Berlin
   grace: 1h

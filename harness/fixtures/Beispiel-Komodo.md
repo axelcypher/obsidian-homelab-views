@@ -8,7 +8,7 @@ network-flow:
     - name: komodo.beispiel.invalid
       entry: beide
       cloudflare: true
-      target: 10.8.0.15:443
+      target: 10.20.0.15:443
       traefik: traefik-01
   ports:
     - port: 9120
@@ -21,7 +21,7 @@ backup:
   what: Core-Datenbank (Komodo „Backup Core Database“)
   engine: mongo
   format: archive
-  source: {files: "10.2.0.5:/volume1/backup/komodo", pattern: "*.gz"}
+  source: {files: "10.30.0.5:/volume1/backup/komodo", pattern: "*.gz"}
   schedule: {times: ["02:00"]}
   tz: UTC
   grace: 1h

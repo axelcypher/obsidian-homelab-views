@@ -14,7 +14,7 @@ const MINIMAL = `
 schema: 1
 id: test-block
 system: restic
-source: {restic: "10.5.0.101:/backup/x"}
+source: {restic: "10.50.0.10:/backup/x"}
 schedule: {times: ["02:30"]}
 tz: Europe/Berlin
 `;
@@ -35,7 +35,7 @@ describe("backup schema 1: valid blocks", () => {
   id: docker-01-restic
   system: restic
   what: /data (persistent, db, bulk)
-  source: {restic: 10.5.0.101:/backup/docker/bind/01}
+  source: {restic: 10.50.0.10:/backup/docker/bind/01}
   schedule: {times: ["02:30"]}
   tz: Europe/Berlin
   grace: 3h
@@ -45,7 +45,7 @@ describe("backup schema 1: valid blocks", () => {
   type: job
   system: restic
   job: prune
-  on: {restic: 10.5.0.101:/backup/docker/bind/01}
+  on: {restic: 10.50.0.10:/backup/docker/bind/01}
   schedule: {weekdays: [sun], times: ["02:30"]}
   tz: Europe/Berlin
 - schema: 1
@@ -54,7 +54,7 @@ describe("backup schema 1: valid blocks", () => {
   system: dumps
   job: sync
   what: Komodo-Prozedur db-dumps-sync
-  on: {restic: 10.5.0.101:/backup/docker/dumps/01}
+  on: {restic: 10.50.0.10:/backup/docker/dumps/01}
   schedule: {times: ["07:40", "13:40", "19:40", "23:40"]}
   tz: Europe/Berlin`,
 			`
@@ -63,7 +63,7 @@ describe("backup schema 1: valid blocks", () => {
   system: dumps
   engine: postgres
   format: dump
-  source: {restic: 10.5.0.101:/backup/k3s/dumps, host: k3s, tag: authentik}
+  source: {restic: 10.50.0.10:/backup/k3s/dumps, host: k3s, tag: authentik}
   schedule: {times: ["07:15", "13:15", "19:15", "23:15"]}
   tz: Europe/Berlin
   grace: 1h
@@ -74,7 +74,7 @@ describe("backup schema 1: valid blocks", () => {
   copy-of: authentik-dump
   engine: postgres
   format: dump
-  source: {files: 10.2.0.5:/volume1/backup/database/k3s/authentik, pattern: "*/*.gz"}
+  source: {files: 10.30.0.5:/volume1/backup/database/k3s/authentik, pattern: "*/*.gz"}
   schedule: {weekdays: [sun], times: ["23:15"]}
   tz: Europe/Berlin
   grace: 2h
@@ -85,7 +85,7 @@ describe("backup schema 1: valid blocks", () => {
   system: pbs-vm
   what: Systemplatte (VM 102)
   format: vma
-  source: {files: 10.2.0.5:/volume1/backup/dump, pattern: "vzdump-qemu-102-*.vma.zst"}
+  source: {files: 10.30.0.5:/volume1/backup/dump, pattern: "vzdump-qemu-102-*.vma.zst"}
   schedule: {weekdays: [sun], times: ["01:00"]}
   tz: Europe/Berlin
   grace: 2h
@@ -103,7 +103,7 @@ schema: 1
 id: mc-berkano
 system: restic
 what: Berkano world + config (über RCON)
-source: {restic: 10.5.0.101:/backup/docker/minecraft/berkano}
+source: {restic: 10.50.0.10:/backup/docker/minecraft/berkano}
 schedule: {every: 6h}
 tz: Europe/Berlin
 grace: 2h
@@ -126,7 +126,7 @@ schema: 1
 id: authentik-dump
 system: dumps
 engine: postgres
-source: {restic: "10.5.0.101:/backup/k3s/dumps", host: k3s, tag: authentik}
+source: {restic: "10.50.0.10:/backup/k3s/dumps", host: k3s, tag: authentik}
 schedule: {times: ["13:15", "07:15"]}
 tz: Europe/Berlin
 grace: 1h
@@ -136,7 +136,7 @@ retention: {keep-last: 4, max-age: 14d}`),
 		assert.equal(p.field, "backup");
 		assert.equal(b.type, "backup");
 		assert.equal(b.system, "dumps");
-		assert.deepEqual(b.source, { kind: "restic", repo: "10.5.0.101:/backup/k3s/dumps", host: "k3s", tag: "authentik", path: undefined });
+		assert.deepEqual(b.source, { kind: "restic", repo: "10.50.0.10:/backup/k3s/dumps", host: "k3s", tag: "authentik", path: undefined });
 		assert.deepEqual(b.schedule, { kind: "times", times: ["13:15", "07:15"] });
 		assert.equal(b.graceMs, 3_600_000);
 		assert.deepEqual(b.retention.counts, [{ key: "keep-last", value: 4 }]);
@@ -231,7 +231,7 @@ copy-of: other`;
 	});
 
 	test("extra field of another location key", () => {
-		const issues = issuesOf(MINIMAL.replace(`source: {restic: "10.5.0.101:/backup/x"}`, `source: {restic: "a:/b", ns: foo}`));
+		const issues = issuesOf(MINIMAL.replace(`source: {restic: "10.50.0.10:/backup/x"}`, `source: {restic: "a:/b", ns: foo}`));
 		assert.match(find(issues, "backup.source.ns").message, /gehört zu pbs, nicht zu restic/);
 	});
 });
@@ -283,7 +283,7 @@ describe("backup schema 1: wrong types and values", () => {
 		assert.ok(find(issuesOf(MINIMAL + "engine: postgresql\n"), "backup.engine"));
 		assert.ok(find(issuesOf(MINIMAL + "format: zip\n"), "backup.format"));
 		assert.ok(find(issuesOf(MINIMAL + "type: copy\n"), "backup.type"));
-		const job = MINIMAL.replace(`source: {restic: "10.5.0.101:/backup/x"}`, `type: job\njob: backup\non: {restic: "a:/b"}`);
+		const job = MINIMAL.replace(`source: {restic: "10.50.0.10:/backup/x"}`, `type: job\njob: backup\non: {restic: "a:/b"}`);
 		assert.match(find(issuesOf(job), "backup.job").message, /erlaubt: prune, verify, gc, sync/);
 	});
 
@@ -295,15 +295,15 @@ describe("backup schema 1: wrong types and values", () => {
 	});
 
 	test("source: none, two, or malformed location", () => {
-		assert.match(issuesOf(MINIMAL.replace(`{restic: "10.5.0.101:/backup/x"}`, "{host: k3s}"))[0].message, /Ortsschlüssel fehlt/);
+		assert.match(issuesOf(MINIMAL.replace(`{restic: "10.50.0.10:/backup/x"}`, "{host: k3s}"))[0].message, /Ortsschlüssel fehlt/);
 		assert.match(
-			find(issuesOf(MINIMAL.replace(`{restic: "10.5.0.101:/backup/x"}`, `{restic: "a:/b", files: "c:/d"}`)), "backup.source").message,
+			find(issuesOf(MINIMAL.replace(`{restic: "10.50.0.10:/backup/x"}`, `{restic: "a:/b", files: "c:/d"}`)), "backup.source").message,
 			/gefunden: restic, files/,
 		);
-		assert.match(find(issuesOf(MINIMAL.replace(`{restic: "10.5.0.101:/backup/x"}`, "{pbs: 2001}")), "backup.source.pbs").message, /Text/);
-		assert.match(find(issuesOf(MINIMAL.replace(`{restic: "10.5.0.101:/backup/x"}`, "{pbs: vms/2001}")), "backup.source.pbs").message, /Backup-Gruppe/);
-		assert.match(find(issuesOf(MINIMAL.replace(`{restic: "10.5.0.101:/backup/x"}`, "{restic: /backup/x}")), "backup.source.restic").message, /server:\/pfad/);
-		assert.match(find(issuesOf(MINIMAL.replace(`{restic: "10.5.0.101:/backup/x"}`, "{longhorn: immich}")), "backup.source.longhorn").message, /namespace\/pvc/);
+		assert.match(find(issuesOf(MINIMAL.replace(`{restic: "10.50.0.10:/backup/x"}`, "{pbs: 2001}")), "backup.source.pbs").message, /Text/);
+		assert.match(find(issuesOf(MINIMAL.replace(`{restic: "10.50.0.10:/backup/x"}`, "{pbs: vms/2001}")), "backup.source.pbs").message, /Backup-Gruppe/);
+		assert.match(find(issuesOf(MINIMAL.replace(`{restic: "10.50.0.10:/backup/x"}`, "{restic: /backup/x}")), "backup.source.restic").message, /server:\/pfad/);
+		assert.match(find(issuesOf(MINIMAL.replace(`{restic: "10.50.0.10:/backup/x"}`, "{longhorn: immich}")), "backup.source.longhorn").message, /namespace\/pvc/);
 	});
 
 	test("a list item that is not an object", () => {

@@ -4,12 +4,12 @@ network-flow:
   kind: machine
   name: beispiel-vm
   type: vm
-  host: sol
+  host: pve-01
   addresses:
-    - ip: 10.8.0.99
-      subnet: oxygen
+    - ip: 10.20.0.99
+      subnet: lan
       mac: bc:24:11:dc:99:08
-    - ip: 10.5.0.99
+    - ip: 10.50.0.99
       subnet: backup
       mac: bc:24:11:dc:99:05
 backup:
@@ -26,7 +26,7 @@ backup:
     id: beispiel-vm-restic
     system: restic
     what: /data (persistent, db, bulk)
-    source: {restic: "10.5.0.101:/backup/docker/bind/99"}
+    source: {restic: "10.50.0.101:/backup/docker/bind/99"}
     schedule: {times: ["02:30"]}
     tz: Europe/Berlin
     grace: 3h
@@ -36,7 +36,7 @@ backup:
     type: job
     system: restic
     job: prune
-    on: {restic: "10.5.0.101:/backup/docker/bind/99"}
+    on: {restic: "10.50.0.101:/backup/docker/bind/99"}
     schedule: {weekdays: [sun], times: ["02:30"]}
     tz: Europe/Berlin
   - schema: 1
@@ -45,7 +45,7 @@ backup:
     system: dumps
     job: sync
     what: Komodo-Prozedur db-dumps-sync
-    on: {restic: "10.5.0.101:/backup/docker/dumps/99"}
+    on: {restic: "10.50.0.101:/backup/docker/dumps/99"}
     schedule: {times: ["07:40", "13:40", "19:40", "23:40"]}
     tz: Europe/Berlin
 ---

@@ -7,13 +7,13 @@ network-flow:
     hostnames:
       - name: spiel.example.invalid
         entry: internet
-        target: 10.9.0.99:25565
+        target: 10.90.0.99:25565
 backup:
   - schema: 1
     id: beispiel-gameserver-welt
     system: restic
     what: Welt (konsistent, save-off)
-    source: {restic: "10.5.0.101:/backup/docker/minecraft/beispiel"}
+    source: {restic: "10.50.0.101:/backup/docker/minecraft/beispiel"}
     schedule: {every: 6h}
     tz: Europe/Berlin
     grace: 1h

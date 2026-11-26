@@ -94,7 +94,7 @@ export const ID_PATTERN = /^[a-z0-9-]+$/;
 const ID_MSG = "nur Kleinbuchstaben, Ziffern und „-“";
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const SERVER_PATH = /^[^\s:/]+:\/\S*$/;
-const SERVER_PATH_MSG = "erwartet server:/pfad, z. B. 10.5.0.101:/backup/…";
+const SERVER_PATH_MSG = "erwartet server:/pfad, z. B. 10.50.0.10:/backup/…";
 
 /** Location key of each `source` and the extra fields that belong to it. */
 const SOURCE_FIELDS: Record<SourceKind, readonly string[]> = {

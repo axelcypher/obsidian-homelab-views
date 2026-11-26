@@ -4,19 +4,19 @@ network-flow:
   kind: machine
   name: beispiel-pbs
   type: vm
-  host: sol
+  host: pve-01
   addresses:
-    - ip: 10.5.0.98
+    - ip: 10.50.0.98
       subnet: backup
       mac: bc:24:11:dc:98:05
-  web-interface: 10.5.0.98:8007
+  web-interface: 10.50.0.98:8007
 backup:
   - schema: 1
     id: beispiel-pbs-vzdump
     system: pbs-vm
     what: Systemplatte (VM 998)
     format: vma
-    source: {files: "10.2.0.5:/volume1/backup/dump", pattern: "vzdump-qemu-998-*.vma.zst"}
+    source: {files: "10.30.0.5:/volume1/backup/dump", pattern: "vzdump-qemu-998-*.vma.zst"}
     schedule: {weekdays: [sun], times: ["01:00"]}
     tz: Europe/Berlin
     grace: 2h

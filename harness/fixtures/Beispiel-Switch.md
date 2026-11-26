@@ -5,14 +5,14 @@ network-flow:
     name: beispiel-switch
     type: switch
     addresses:
-      - ip: 10.4.0.99
+      - ip: 10.40.0.99
         subnet: beryllium
     macs: ["00:1a:2b:00:99:10"]
     rack:
       name: Beispielrack
       position: 9
       units: 1
-    web-interface: 10.4.0.99:80
+    web-interface: 10.40.0.99:80
     connections:
       - port: g1
         to: "beispiel-fw:igb0"

@@ -5,9 +5,9 @@ network-flow:
   name: beispiel-cluster
   machines: [beispiel-node-01, beispiel-node-02, beispiel-node-03]
   lb-ips:
-    - ip: 10.8.0.95
+    - ip: 10.20.0.95
       services: [traefik]
-    - ip: 10.8.0.96
+    - ip: 10.20.0.96
 backup:
   schema: 1
   id: beispiel-longhorn-daten

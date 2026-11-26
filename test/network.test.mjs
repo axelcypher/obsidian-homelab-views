@@ -16,7 +16,7 @@ runs-on: k3s-evangelion
 hostnames:
   - name: immich.pendzialek.net
     entry: beide
-    target: 10.8.0.50:443
+    target: 10.20.0.50:443
     traefik: cluster`,
 			`
 schema: 2
@@ -46,7 +46,7 @@ web-interface: 10.8.0.34:8006`,
 - schema: 1
   kind: subnet
   name: oxygen
-  network: 10.8.0.0/16
+  network: 10.20.0.0/16
   vlan: 8
   medium: LAN
 - schema: 1
@@ -87,7 +87,7 @@ name: k3s-evangelion
 machines: [k3s-magi-01, k3s-magi-02]
 lb-ips:
   - ip: 10.8.0.45
-  - {ip: 10.8.0.50, services: [traefik]}`,
+  - {ip: 10.20.0.50, services: [traefik]}`,
 			`
 schema: 1
 kind: app
