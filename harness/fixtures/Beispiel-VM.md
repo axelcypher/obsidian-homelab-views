@@ -48,6 +48,24 @@ backup:
     on: {restic: "10.50.0.101:/backup/docker/dumps/99"}
     schedule: {times: ["07:40", "13:40", "19:40", "23:40"]}
     tz: Europe/Berlin
+tasks:
+  - schema: 1
+    id: beispiel-vm-reboot
+    what: Neustart aus dem Gast (hält die Dirty-Bitmap)
+    kind: reboot
+    runner: {cron: pve-01, file: crontab/proxmox.pve-01.crontab, user: root}
+    schedule: {weekdays: [wed], times: ["05:30"]}
+    tz: Europe/Berlin
+    duration: 15m
+    command: qm guest exec 9999 -- systemctl reboot
+  - schema: 1
+    id: beispiel-vm-docker-prune
+    what: Ungenutzte Images und Volumes entfernen
+    kind: cleanup
+    runner: {komodo: prune-docker-leftovers}
+    schedule: {weekdays: [sun], times: ["04:00"]}
+    tz: Europe/Berlin
+    duration: 10m
 ---
 # Beispiel-VM
 

@@ -14,9 +14,9 @@ const only = process.argv.slice(3);
 fs.mkdirSync(outDir, { recursive: true });
 
 const page = pathToFileURL(path.join(here, "out", "index.html")).href;
-const desktop = ["card-vm", "card-app", "backups", "schedule", "network"];
+const desktop = ["card-vm", "card-app", "backups", "schedule", "tasks", "network"];
 const extra = ["card-pbs", "card-firewall", "card-switch", "card-gallery", "card-error", "card-game", "card-cluster", "backups-flat"];
-const phone = ["card-vm", "card-app", "backups", "schedule", "network"];
+const phone = ["card-vm", "card-app", "backups", "schedule", "tasks", "network"];
 
 const jobs = [];
 for (const view of [...desktop, ...extra]) for (const theme of ["light", "dark"]) jobs.push({ view, theme, width: 900, name: `${view}-${theme}` });

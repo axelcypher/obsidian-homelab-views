@@ -1,5 +1,6 @@
 /** German labels and colour assignment for the UI. */
 import type { BackupSystem, RetentionCount } from "../model/backup";
+import type { TaskKind, TaskRunnerKind } from "../model/tasks";
 
 export const SYSTEM_LABEL: Record<BackupSystem, string> = {
 	pbs: "PBS",
@@ -20,6 +21,37 @@ export const SYSTEM_COLOR: Record<BackupSystem, string> = {
 	longhorn: "orange",
 	homeassistant: "yellow",
 	opnsense: "red",
+};
+
+/** Who starts a task; the four kinds stay apart in every view. */
+export const RUNNER_LABEL: Record<TaskRunnerKind, string> = {
+	cron: "Host-Cron",
+	k3s: "k3s-CronJob",
+	komodo: "Komodo",
+	app: "App-intern",
+};
+
+export const RUNNER_HINT: Record<TaskRunnerKind, string> = {
+	cron: "Crontab auf einem Host (Proxmox-Node, VM, Bare Metal)",
+	k3s: "CronJob im k3s-Cluster",
+	komodo: "Zeitplan einer Komodo-Prozedur oder -Aktion",
+	app: "eigener Zeitplan der App",
+};
+
+export const RUNNER_ICON: Record<TaskRunnerKind, string> = {
+	cron: "terminal",
+	k3s: "boxes",
+	komodo: "workflow",
+	app: "app-window",
+};
+
+export const TASK_KIND_LABEL: Record<TaskKind, string> = {
+	reboot: "Neustart",
+	update: "Update",
+	cleanup: "Aufräumen",
+	check: "Prüfung",
+	maintenance: "Wartung",
+	other: "Sonstiges",
 };
 
 export const JOB_LABEL: Record<string, string> = {

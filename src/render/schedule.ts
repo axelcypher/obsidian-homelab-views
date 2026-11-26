@@ -2,21 +2,55 @@
  * `homelab-schedule`: all runs of the current week (Monday to Sunday) in the
  * display zone, as a 00–24 timeline per weekday and as a list sorted by time;
  * interval schedules separately; overlaps of run windows (start + grace).
+ * Scheduled tasks (`tasks`: host cron, k3s CronJobs, Komodo, app-internal) are
+ * drawn next to the backups in their own dashed style, labelled by who starts them.
  */
 import { BACKUP_SYSTEMS } from "../model/backup";
-import { BackupEntry, backupTitle } from "../model/index";
+import { BackupEntry, TaskEntry, backupTitle, taskTitle } from "../model/index";
+import { TASK_RUNNERS } from "../model/tasks";
 import { compareKeys } from "../model/ip";
 import { Overlap, PlannedBlock, Run, findOverlaps, runsBetween } from "../schedule/overlaps";
 import { WEEKDAYS, WEEKDAY_SHORT, formatDuration, formatWeekdays } from "../schedule/schedule";
 import { LocalDate, MINUTE, addDays, clock, localDate, sameLocalDate, wallTime, weekdayOf, zonedToInstant } from "../schedule/time";
 import { el, txt } from "./dom";
 import type { RenderEnv, ViewState } from "./env";
-import { emptyState, icon, jobBadge, problemsSection, scrollWrap, systemClass, titleIsJob } from "./common";
-import { JOB_LABEL, SOURCE_LABEL, SYSTEM_LABEL, plural } from "./labels";
+import { emptyState, icon, jobBadge, problemsSection, runnerClass, scrollWrap, systemClass, taskKindBadge, titleIsJob } from "./common";
+import { JOB_LABEL, RUNNER_HINT, RUNNER_LABEL, SOURCE_LABEL, SYSTEM_LABEL, TASK_KIND_LABEL, plural } from "./labels";
 import type { ScheduleOptions } from "./options";
 
+/** A backup block or a scheduled task, as the schedule shows it. */
+type Item = { type: "backup"; entry: BackupEntry } | { type: "task"; entry: TaskEntry };
+
 interface Planned extends PlannedBlock {
-	entry: BackupEntry;
+	item: Item;
+}
+
+const noteOf = (i: Item) => i.entry.note;
+const idOf = (i: Item) => i.entry.block.id;
+const lengthOf = (i: Item) => (i.type === "backup" ? i.entry.block.graceMs : i.entry.block.durationMs);
+const isJob = (i: Item) => i.type === "backup" && i.entry.block.type === "job";
+const titleOf = (i: Item) => (i.type === "backup" ? backupTitle(i.entry.block) : taskTitle(i.entry.block));
+
+/** Colour class: backup system, or the runner of a task (dashed, see styles). */
+function colorClass(i: Item): string {
+	return i.type === "backup" ? systemClass(i.entry.block.system) : `${runnerClass(i.entry.block.runner?.kind)} is-task`;
+}
+
+/** "PBS", "Job Prune", "Host-Cron", "k3s-CronJob". */
+function originLabel(i: Item): string {
+	if (i.type === "task") {
+		const r = i.entry.block.runner;
+		return r ? RUNNER_LABEL[r.kind] : "ohne runner";
+	}
+	const b = i.entry.block;
+	if (b.type === "job") return `Job ${JOB_LABEL[b.job ?? ""] ?? b.job ?? ""}`;
+	return b.system ? SYSTEM_LABEL[b.system] : "ohne System";
+}
+
+/** Sort rank within one start time: backups by system, then tasks by runner. */
+function rank(i: Item): number {
+	if (i.type === "backup") return BACKUP_SYSTEMS.indexOf(i.entry.block.system ?? "pbs");
+	return 100 + TASK_RUNNERS.indexOf(i.entry.block.runner?.kind ?? "app");
 }
 
 interface Day {
@@ -27,13 +61,28 @@ interface Day {
 	isToday: boolean;
 }
 
-export function planned(entries: BackupEntry[]): Planned[] {
+export function planned(entries: BackupEntry[], tasks: TaskEntry[] = []): Planned[] {
 	const out: Planned[] = [];
+	for (const e of tasks) {
+		const b = e.block;
+		if (!b.schedule || !b.tz || b.schedule.kind !== "times") continue;
+		out.push({
+			item: { type: "task", entry: e },
+			key: e.key,
+			id: b.id,
+			notePath: e.note.path,
+			type: "task",
+			taskKind: b.kind,
+			graceMs: b.durationMs,
+			schedule: b.schedule,
+			tz: b.tz,
+		});
+	}
 	for (const e of entries) {
 		const b = e.block;
 		if (b.type === "ignore" || !b.schedule || !b.tz || b.schedule.kind !== "times") continue;
 		out.push({
-			entry: e,
+			item: { type: "backup", entry: e },
 			key: e.key,
 			id: b.id,
 			notePath: e.note.path,
@@ -81,14 +130,17 @@ export function renderSchedule(
 	env: RenderEnv,
 	opts: ScheduleOptions,
 	state: ViewState,
+	taskEntries: TaskEntry[] = [],
 ): void {
 	void state;
 	const root = el(parent, "div", "hv-root hv-view hv-schedule");
-	let list = entries;
+	let list = opts.backups ? entries : [];
 	if (opts.system) list = list.filter((e) => e.block.system && opts.system?.includes(e.block.system));
 	if (!opts.jobs) list = list.filter((e) => e.block.type !== "job");
-	if (!list.length) {
-		emptyState(root, "Keine Backup-Blöcke gefunden.");
+	let tasks = opts.tasks ? taskEntries : [];
+	if (opts.runner) tasks = tasks.filter((e) => e.block.runner && opts.runner?.includes(e.block.runner.kind));
+	if (!list.length && !tasks.length) {
+		emptyState(root, "Keine Sicherungen oder geplanten Aufgaben gefunden.");
 		return;
 	}
 
@@ -96,10 +148,13 @@ export function renderSchedule(
 	const days = currentWeek(env.now, tz);
 	const weekStart = days[0].start;
 	const weekEnd = days[6].end;
-	const blocks = planned(list);
+	const blocks = planned(list, tasks);
 	const runs = runsBetween(blocks, weekStart, weekEnd);
 	const overlaps = findOverlaps(runs);
-	const intervals = list.filter((e) => e.block.schedule?.kind === "every");
+	const intervals: Item[] = [
+		...list.filter((e) => e.block.schedule?.kind === "every").map((entry): Item => ({ type: "backup", entry })),
+		...tasks.filter((e) => e.block.schedule?.kind === "every").map((entry): Item => ({ type: "task", entry })),
+	];
 
 	// Runs taking part in an overlap, for highlighting
 	const marked = new Map<string, Overlap["level"]>();
@@ -128,6 +183,16 @@ export function renderSchedule(
 		el(item, "span", { cls: "hv-legend-swatch is-job", attr: { "aria-hidden": "true" } });
 		el(item, "span", { text: "Job" });
 	}
+	const runners = TASK_RUNNERS.filter((r) => tasks.some((e) => e.block.runner?.kind === r));
+	if (runners.length) {
+		if (list.length) el(legend, "span", { cls: "hv-legend-sep", attr: { "aria-hidden": "true" } });
+		el(legend, "span", { cls: "hv-legend-group", text: "Aufgaben" });
+		for (const r of runners) {
+			const item = el(legend, "span", { cls: `hv-legend-item ${runnerClass(r)}`, title: RUNNER_HINT[r] });
+			el(item, "span", { cls: "hv-legend-swatch is-task", attr: { "aria-hidden": "true" } });
+			el(item, "span", { text: RUNNER_LABEL[r] });
+		}
+	}
 	el(bar, "div", {
 		cls: "hv-toolbar-meta",
 		text: `Woche ${dateLabel(days[0].date)}–${dateLabel(days[6].date)} · Zeiten in ${tz}`,
@@ -139,7 +204,7 @@ export function renderSchedule(
 	if (intervals.length) intervalList(root, intervals, env);
 	problemsSection(
 		root,
-		list.map((e) => ({ note: e.note, field: e.field, issues: e.issues, label: e.block.id })),
+		[...list, ...tasks].map((e) => ({ note: e.note, field: e.field, issues: e.issues, label: e.block.id })),
 		env,
 	);
 }
@@ -148,15 +213,21 @@ export function renderSchedule(
 // Timeline
 
 function runTitle(r: Run<Planned>, tz: string): string {
-	const b = r.block.entry.block;
-	const parts = [
-		`${clock(r.start, tz)}${b.graceMs ? `–${clock(r.end, tz)}` : ""}`,
-		b.id ?? "",
-		b.type === "job" ? `Job ${JOB_LABEL[b.job ?? ""] ?? b.job ?? ""}` : backupTitle(b),
-		b.system ? SYSTEM_LABEL[b.system] : "",
-		b.graceMs ? `Karenz ${formatDuration(b.graceMs)}` : "",
-		r.block.entry.note.name,
-	];
+	const i = r.block.item;
+	const len = lengthOf(i);
+	const parts = [`${clock(r.start, tz)}${len ? `–${clock(r.end, tz)}` : ""}`, idOf(i) ?? ""];
+	if (i.type === "backup") {
+		const b = i.entry.block;
+		parts.push(b.type === "job" ? `Job ${JOB_LABEL[b.job ?? ""] ?? b.job ?? ""}` : backupTitle(b), b.system ? SYSTEM_LABEL[b.system] : "");
+		if (len) parts.push(`Karenz ${formatDuration(len)}`);
+	} else {
+		const b = i.entry.block;
+		const kind = b.kind ? (TASK_KIND_LABEL as Record<string, string>)[b.kind] : "";
+		parts.push(kind ? `${kind}: ${taskTitle(b)}` : taskTitle(b), originLabel(i));
+		if (b.runner?.kind === "cron") parts.push(`Host ${b.runner.host}`);
+		if (len) parts.push(`Dauer ${formatDuration(len)}`);
+	}
+	parts.push(noteOf(i).name);
 	return parts.filter(Boolean).join(" · ");
 }
 
@@ -194,7 +265,7 @@ function timeline(
 			const from = Math.max(r.start, day.start);
 			const to = Math.min(r.end, day.end);
 			if (from >= to) continue;
-			const b = r.block.entry.block;
+			const it = r.block.item;
 			const seg: Segment = {
 				run: r,
 				day: day.index,
@@ -202,7 +273,8 @@ function timeline(
 				width: Math.max((to - from) / MINUTE, 1),
 				cont: r.start < day.start,
 			};
-			const key = [b.system ?? "", b.type, b.graceMs ? "g" : "p", seg.left, Math.round(seg.width), seg.cont ? "c" : ""].join("|");
+			const color = it.type === "backup" ? it.entry.block.system ?? "" : `task:${it.entry.block.runner?.kind ?? ""}`;
+const key = [color, r.block.type, lengthOf(it) ? "g" : "p", seg.left, Math.round(seg.width), seg.cont ? "c" : ""].join("|");
 			const id = `${day.index}|${key}`;
 			const bar = bars.get(id);
 			if (bar) bar.segs.push(seg);
@@ -251,11 +323,11 @@ function timeline(
 
 		for (const bar of bars.values()) {
 			if (bar.day !== day.index) continue;
-			const first = bar.segs[0].run.block.entry.block;
+			const first = bar.segs[0].run.block.item;
 			const levels = bar.segs.map((s) => marked.get(runId(s.run)));
-			const cls = ["hv-tl-bar", systemClass(first.system)];
-			if (first.type === "job") cls.push("is-job");
-			if (!first.graceMs) cls.push("is-point");
+			const cls = ["hv-tl-bar", colorClass(first)];
+			if (isJob(first)) cls.push("is-job");
+			if (!lengthOf(first)) cls.push("is-point");
 			if (bar.cont) cls.push("is-cont");
 			if (levels.includes("collision")) cls.push("is-collision");
 			else if (levels.includes("hint")) cls.push("is-hint");
@@ -267,8 +339,8 @@ function timeline(
 					style: `left: ${(bar.left / 1440) * 100}%; width: ${(bar.width / 1440) * 100}%; --hv-lane: ${laneOf.get(bar.key) ?? 0}`,
 				},
 			});
-			const notes = new Set(bar.segs.map((s) => s.run.block.entry.note.path));
-			if (notes.size === 1) env.bindOpen(elBar, bar.segs[0].run.block.entry.note);
+			const notes = new Set(bar.segs.map((s) => noteOf(s.run.block.item).path));
+			if (notes.size === 1) env.bindOpen(elBar, noteOf(bar.segs[0].run.block.item));
 			if (bar.segs.length > 1 && bar.width >= 85) el(elBar, "span", { cls: "hv-tl-count", text: `×${bar.segs.length}` });
 		}
 
@@ -304,7 +376,7 @@ function runList(parent: HTMLElement, days: Day[], runs: Run<Planned>[], marked:
 		const k = `${r.block.key}|${time}`;
 		let row = rows.get(k);
 		if (!row) {
-			const b = r.block.entry.block;
+			const len = lengthOf(r.block.item);
 			const orig = r.block.tz !== tz ? clock(r.start, r.block.tz) : undefined;
 			row = {
 				planned: r.block,
@@ -312,7 +384,7 @@ function runList(parent: HTMLElement, days: Day[], runs: Run<Planned>[], marked:
 				minute: minuteOfDay(r.start, tz),
 				original: orig && orig !== time ? `${orig} ${r.block.tz}` : undefined,
 				days: new Set(),
-				until: b.graceMs ? clock(r.end, tz) : undefined,
+				until: len ? clock(r.end, tz) : undefined,
 			};
 			rows.set(k, row);
 		}
@@ -322,9 +394,7 @@ function runList(parent: HTMLElement, days: Day[], runs: Run<Planned>[], marked:
 	}
 	const sorted = [...rows.values()].sort(
 		(a, b) =>
-			a.minute - b.minute ||
-			BACKUP_SYSTEMS.indexOf(a.planned.entry.block.system ?? "pbs") - BACKUP_SYSTEMS.indexOf(b.planned.entry.block.system ?? "pbs") ||
-			compareKeys(a.planned.id ?? "", b.planned.id ?? ""),
+			a.minute - b.minute || rank(a.planned.item) - rank(b.planned.item) || compareKeys(a.planned.id ?? "", b.planned.id ?? ""),
 	);
 
 	const section = el(parent, "div", "hv-subsection");
@@ -332,13 +402,14 @@ function runList(parent: HTMLElement, days: Day[], runs: Run<Planned>[], marked:
 	const wrap = scrollWrap(section);
 	const table = el(wrap, "table", "hv-table hv-run-table");
 	const head = el(el(table, "thead"), "tr");
-	for (const h of ["Zeit", "Tage", "Was", "Notiz", "Karenz"]) el(head, "th", { text: h });
+	for (const h of ["Zeit", "Tage", "Was", "Notiz", "Karenz / Dauer"]) el(head, "th", { text: h });
 	const tbody = el(table, "tbody");
 	const todayIdx = days.find((d) => d.isToday)?.index;
 	let lastMinute = -1;
 	for (const r of sorted) {
-		const b = r.planned.entry.block;
-		const cls = [systemClass(b.system)];
+		const item = r.planned.item;
+		const len = lengthOf(item);
+		const cls = [colorClass(item)];
 		if (r.minute !== lastMinute && lastMinute >= 0) cls.push("is-new-time");
 		if (r.level) cls.push(`is-${r.level}`);
 		const tr = el(tbody, "tr", cls.join(" "));
@@ -352,26 +423,29 @@ function runList(parent: HTMLElement, days: Day[], runs: Run<Planned>[], marked:
 		const d = el(tr, "td", "hv-col-days");
 		weekdayStrip(d, r.days, todayIdx);
 
-		whatCell(el(tr, "td", "hv-col-was"), r.planned.entry, r.level);
-		env.link(el(tr, "td", "hv-col-notiz"), r.planned.entry.note, r.planned.entry.note.name, "hv-note-link");
+		whatCell(el(tr, "td", "hv-col-was"), item, r.level);
+		env.link(el(tr, "td", "hv-col-notiz"), noteOf(item), noteOf(item).name, "hv-note-link");
 		const g = el(tr, "td", "hv-col-karenz");
-		if (b.graceMs !== undefined) {
-			txt(g, formatDuration(b.graceMs));
+		if (len !== undefined) {
+			txt(g, formatDuration(len));
 			if (r.until) el(g, "div", { cls: "hv-faint", text: `bis ${r.until}` });
 		} else el(g, "span", { cls: "hv-faint", text: "–" });
 	}
 }
 
-/** Title with job badge; below: system (coloured dot), id and an overlap tag. */
-function whatCell(td: HTMLElement, e: BackupEntry, level?: Overlap["level"]): void {
-	const b = e.block;
+/** Title with job or task badge; below: system or runner (dot), id and an overlap tag. */
+function whatCell(td: HTMLElement, item: Item, level?: Overlap["level"]): void {
 	const line = el(td, "div", "hv-what");
-	el(line, "span", { cls: "hv-what-text", text: backupTitle(b) });
-	if (b.type === "job") jobBadge(line, b.job, !titleIsJob(b));
-	const meta = el(td, "div", `hv-what-meta ${systemClass(b.system)}`);
-	el(meta, "span", { cls: "hv-dot", attr: { "aria-hidden": "true" } });
-	el(meta, "span", { cls: "hv-what-sys", text: b.system ? SYSTEM_LABEL[b.system] : "ohne System" });
-	el(meta, "span", { cls: "hv-what-id hv-mono", text: b.id ?? "" });
+	el(line, "span", { cls: "hv-what-text", text: titleOf(item) });
+	if (item.type === "backup" && item.entry.block.type === "job") jobBadge(line, item.entry.block.job, !titleIsJob(item.entry.block));
+	if (item.type === "task") taskKindBadge(line, item.entry.block.kind);
+	const meta = el(td, "div", `hv-what-meta ${colorClass(item)}`);
+	el(meta, "span", { cls: `hv-dot${item.type === "task" ? " is-hollow" : ""}`, attr: { "aria-hidden": "true" } });
+	el(meta, "span", {
+		cls: "hv-what-sys",
+		text: item.type === "backup" ? (item.entry.block.system ? SYSTEM_LABEL[item.entry.block.system] : "ohne System") : originLabel(item),
+	});
+	el(meta, "span", { cls: "hv-what-id hv-mono", text: idOf(item) ?? "" });
 	if (level) {
 		el(meta, "span", {
 			cls: `hv-ov-tag is-${level}`,
@@ -402,25 +476,26 @@ function sectionTitle(parent: HTMLElement, title: string, meta?: string): void {
 // ---------------------------------------------------------------------------
 // Interval schedules
 
-function intervalList(parent: HTMLElement, entries: BackupEntry[], env: RenderEnv): void {
+function intervalList(parent: HTMLElement, entries: Item[], env: RenderEnv): void {
 	const section = el(parent, "div", "hv-subsection");
 	sectionTitle(section, "Ohne feste Uhrzeit", "Intervall, driftet mit jedem Neustart");
 	const wrap = scrollWrap(section);
 	const table = el(wrap, "table", "hv-table hv-run-table");
 	const head = el(el(table, "thead"), "tr");
-	for (const h of ["Intervall", "Was", "Notiz", "Karenz"]) el(head, "th", { text: h });
+	for (const h of ["Intervall", "Was", "Notiz", "Karenz / Dauer"]) el(head, "th", { text: h });
 	const tbody = el(table, "tbody");
-	for (const e of entries) {
-		const b = e.block;
-		if (b.schedule?.kind !== "every") continue;
-		const tr = el(tbody, "tr", systemClass(b.system));
-		el(el(tr, "td", "hv-col-time"), "span", { cls: "hv-time", text: `alle ${formatDuration(b.schedule.everyMs)}` });
-		whatCell(el(tr, "td", "hv-col-was"), e);
-		env.link(el(tr, "td", "hv-col-notiz"), e.note, e.note.name, "hv-note-link");
+	for (const item of entries) {
+		const s = item.entry.block.schedule;
+		if (s?.kind !== "every") continue;
+		const len = lengthOf(item);
+		const tr = el(tbody, "tr", colorClass(item));
+		el(el(tr, "td", "hv-col-time"), "span", { cls: "hv-time", text: `alle ${formatDuration(s.everyMs)}` });
+		whatCell(el(tr, "td", "hv-col-was"), item);
+		env.link(el(tr, "td", "hv-col-notiz"), noteOf(item), noteOf(item).name, "hv-note-link");
 		const g = el(tr, "td", "hv-col-karenz");
-		if (b.graceMs !== undefined) {
-			txt(g, formatDuration(b.graceMs));
-			el(g, "div", { cls: "hv-faint", text: `überfällig nach ${formatDuration(b.schedule.everyMs + b.graceMs)}` });
+		if (len !== undefined) {
+			txt(g, formatDuration(len));
+			if (item.type === "backup") el(g, "div", { cls: "hv-faint", text: `überfällig nach ${formatDuration(s.everyMs + len)}` });
 		} else el(g, "span", { cls: "hv-faint", text: "–" });
 	}
 }
@@ -449,15 +524,12 @@ function targetLabel(target: string): { kind: string; value: string } {
 }
 
 function blockRef(parent: HTMLElement, p: PlannedBlock, env: RenderEnv): void {
-	const e = (p as Planned).entry;
-	const b = e.block;
-	const ref = el(parent, "span", `hv-ov-block ${systemClass(b.system)}`);
-	el(ref, "span", { cls: "hv-dot", attr: { "aria-hidden": "true" } });
-	env.link(ref, e.note, b.id ?? e.field, "hv-ref hv-mono");
-	el(ref, "span", {
-		cls: "hv-faint",
-		text: ` ${b.type === "job" ? `Job ${JOB_LABEL[b.job ?? ""] ?? b.job ?? ""}` : b.system ? SYSTEM_LABEL[b.system] : ""}`,
-	});
+	const item = (p as Planned).item;
+	const e = item.entry;
+	const ref = el(parent, "span", `hv-ov-block ${colorClass(item)}`);
+	el(ref, "span", { cls: `hv-dot${item.type === "task" ? " is-hollow" : ""}`, attr: { "aria-hidden": "true" } });
+	env.link(ref, e.note, e.block.id ?? e.field, "hv-ref hv-mono");
+	el(ref, "span", { cls: "hv-faint", text: ` ${originLabel(item)}` });
 }
 
 function overlapSection(parent: HTMLElement, overlaps: Overlap[], hasIntervals: boolean, env: RenderEnv): void {
@@ -470,7 +542,7 @@ function overlapSection(parent: HTMLElement, overlaps: Overlap[], hasIntervals: 
 		el(head, "span", { cls: "hv-overlaps-title", text: "Keine Überschneidungen" });
 		el(head, "span", {
 			cls: "hv-overlaps-meta",
-			text: `am selben Ziel oder innerhalb einer Notiz${hasIntervals ? "; Intervall-Läufe ohne feste Uhrzeit sind nicht geprüft" : ""}`,
+			text: `am selben Ziel oder innerhalb einer Notiz (auch Neustarts)${hasIntervals ? "; Intervall-Läufe ohne feste Uhrzeit sind nicht geprüft" : ""}`,
 		});
 		return;
 	}
@@ -497,9 +569,9 @@ function overlapSection(parent: HTMLElement, overlaps: Overlap[], hasIntervals: 
 			txt(why, `gleichzeitig am selben Ziel: ${t.kind} `);
 			el(why, "span", { cls: "hv-mono", text: t.value });
 		} else {
-			txt(why, "gleichzeitig in derselben Notiz ");
-			const e = (o.a as Planned).entry;
-			env.link(why, e.note, e.note.name, "hv-ref");
+			txt(why, o.level === "collision" ? "Neustart während eines Laufs derselben Notiz " : "gleichzeitig in derselben Notiz ");
+			const n = noteOf((o.a as Planned).item);
+			env.link(why, n, n.name, "hv-ref");
 		}
 	}
 	if (hasIntervals) el(box, "div", { cls: "hv-overlaps-foot", text: "Intervall-Läufe ohne feste Uhrzeit sind nicht geprüft." });

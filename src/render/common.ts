@@ -1,5 +1,6 @@
 /** Building blocks shared by the note card and the central views. */
 import type { BackupBlock, JobTarget, Retention, Source } from "../model/backup";
+import type { Runner, TaskBlock } from "../model/tasks";
 import type { Issue } from "../model/check";
 import { BackupEntry, NoteRef, errorCount } from "../model/index";
 import { parseHostPort } from "../model/ip";
@@ -7,7 +8,7 @@ import { formatDuration, formatSchedule, labelRun, nextRun } from "../schedule/s
 import { clock } from "../schedule/time";
 import { breakable, el, txt } from "./dom";
 import type { RenderEnv } from "./env";
-import { JOB_LABEL, RETENTION_LABEL, SOURCE_LABEL, SYSTEM_LABEL, plural } from "./labels";
+import { JOB_LABEL, RETENTION_LABEL, RUNNER_HINT, RUNNER_ICON, RUNNER_LABEL, SOURCE_LABEL, SYSTEM_LABEL, TASK_KIND_LABEL, plural } from "./labels";
 
 export function systemClass(system: string | undefined): string {
 	return system ? `hv-sys hv-sys-${system}` : "hv-sys hv-sys-none";
@@ -16,6 +17,75 @@ export function systemClass(system: string | undefined): string {
 export function systemBadge(parent: HTMLElement, system: string | undefined): HTMLElement {
 	const label = system ? (SYSTEM_LABEL as Record<string, string>)[system] ?? system : "ohne System";
 	return el(parent, "span", { cls: `hv-badge hv-badge-sys ${systemClass(system)}`, text: label });
+}
+
+/** Colour class of a task runner (dashed style, separate from the backup systems). */
+export function runnerClass(runner: string | undefined): string {
+	return runner ? `hv-run hv-run-${runner}` : "hv-run hv-run-none";
+}
+
+/** "Host-Cron", "k3s-CronJob", "Komodo", "App-intern" with icon. */
+export function runnerBadge(parent: HTMLElement, runner: string | undefined, env: RenderEnv): HTMLElement {
+	const known = !!runner && runner in RUNNER_LABEL;
+	const b = el(parent, "span", {
+		cls: `hv-badge hv-badge-run ${runnerClass(runner)}`,
+		title: known ? RUNNER_HINT[runner as keyof typeof RUNNER_HINT] : "ohne runner",
+	});
+	if (known) icon(b, env, RUNNER_ICON[runner as keyof typeof RUNNER_ICON], "hv-icon hv-icon-xs");
+	el(b, "span", { text: known ? RUNNER_LABEL[runner as keyof typeof RUNNER_LABEL] : "ohne runner" });
+	return b;
+}
+
+export function taskKindBadge(parent: HTMLElement, kind: string | undefined): HTMLElement | null {
+	if (!kind) return null;
+	return el(parent, "span", {
+		cls: `hv-badge hv-badge-kind${kind === "reboot" ? " is-reboot" : ""}`,
+		text: (TASK_KIND_LABEL as Record<string, string>)[kind] ?? kind,
+	});
+}
+
+/** Where a task is started: host + crontab file, CronJob, Komodo procedure, app. */
+export function runnerView(parent: HTMLElement, r: Runner | undefined, env: RenderEnv, compact = false): void {
+	if (!r) {
+		el(parent, "span", { cls: "hv-faint", text: "–" });
+		return;
+	}
+	const line = el(parent, "div", "hv-loc");
+	const details: [string, string][] = [];
+	switch (r.kind) {
+		case "cron":
+			el(line, "span", { cls: "hv-loc-kind", text: "Host" });
+			el(line, "span", { cls: "hv-strong", text: r.host });
+			if (r.file) details.push(["Datei", r.file]);
+			if (r.user) details.push(["Benutzer", r.user]);
+			break;
+		case "k3s":
+			el(line, "span", { cls: "hv-loc-kind", text: "CronJob" });
+			copyable(line, r.cronjob, env, "hv-loc-value", "path");
+			break;
+		case "komodo":
+			el(line, "span", { cls: "hv-loc-kind", text: r.type === "action" ? "Aktion" : "Prozedur" });
+			el(line, "span", { cls: "hv-strong", text: r.name });
+			break;
+		case "app":
+			el(line, "span", { cls: "hv-loc-kind", text: "App" });
+			el(line, "span", { cls: "hv-strong", text: r.app });
+			break;
+	}
+	if (details.length) {
+		const d = el(parent, "div", compact ? "hv-loc-details is-compact" : "hv-loc-details");
+		for (const [k, v] of details) {
+			const item = el(d, "span", "hv-kv");
+			el(item, "span", { cls: "hv-kv-k", text: k });
+			const val = el(item, "span", "hv-kv-v hv-mono");
+			breakable(val, v, BREAK_PATH);
+		}
+	}
+}
+
+/** Window of a task: "15 min" or "–". */
+export function durationText(b: TaskBlock): string {
+	return b.durationMs === undefined ? "–" : formatDuration(b.durationMs);
 }
 
 /** "Job · Prune"; the kind is left out when the title already names it. */
@@ -169,12 +239,12 @@ export function retentionChips(parent: HTMLElement, r: Retention | undefined): v
 	}
 }
 
-export function scheduleText(b: BackupBlock): string {
+export function scheduleText(b: { schedule?: BackupBlock["schedule"] }): string {
 	return b.schedule ? formatSchedule(b.schedule) : "–";
 }
 
 /** Next run in the display zone: "heute 19:15" + "in 4 h". */
-export function nextRunView(parent: HTMLElement, b: BackupBlock, env: RenderEnv): void {
+export function nextRunView(parent: HTMLElement, b: { schedule?: BackupBlock["schedule"]; tz?: string }, env: RenderEnv): void {
 	if (!b.schedule || !b.tz) {
 		el(parent, "span", { cls: "hv-faint", text: "–" });
 		return;

@@ -9,6 +9,8 @@
  *   where at least one is a job (prune, verify, gc, sync). Example: the restic
  *   backup at 02:30 and the Sunday prune of the same repo at 02:30.
  * - **hint**: two runs of the same note (the same VM or app) at different targets.
+ * - Scheduled tasks (`tasks`, no target): a **collision** when a reboot falls into a
+ *   backup or job of the same note, otherwise a **hint** within the same note.
  *
  * Not reported, because they belong together by design: a block and its
  * `copy-of`; a sync job and the backups it delivers to its target; backups that
@@ -21,8 +23,10 @@ export interface PlannedBlock {
 	key: string;
 	id?: string;
 	notePath: string;
-	type: "backup" | "job";
+	type: "backup" | "job" | "task";
 	job?: string;
+	/** `kind` of a task (reboot, update, …) */
+	taskKind?: string;
 	target?: string;
 	copyOf?: string;
 	graceMs?: number;
@@ -62,6 +66,11 @@ export function runsBetween<B extends PlannedBlock>(blocks: B[], from: number, t
 
 export function classify(a: PlannedBlock, b: PlannedBlock): Overlap["level"] | null {
 	if (a.key === b.key) return null;
+	if (a.type === "task" || b.type === "task") {
+		if (a.notePath !== b.notePath) return null;
+		const reboot = (x: PlannedBlock, y: PlannedBlock) => x.type === "task" && x.taskKind === "reboot" && y.type !== "task";
+		return reboot(a, b) || reboot(b, a) ? "collision" : "hint";
+	}
 	if ((a.copyOf && a.copyOf === b.id) || (b.copyOf && b.copyOf === a.id)) return null;
 	const sameTarget = !!a.target && a.target === b.target;
 	if (sameTarget) {

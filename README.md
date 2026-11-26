@@ -4,14 +4,16 @@
 > It is not published in the Obsidian community plugin directory.
 
 Renders the frontmatter of my homelab docs as readable cards, tables and a weekly
-schedule – without Dataview or Bases. It reads two frontmatter keys:
+schedule – without Dataview or Bases. It reads three frontmatter keys:
 
 - **`backup`** – backup blocks, schema 1 (vault note
   `homelab-docs/projects/backup-ui/Frontmatter für Backups.md`)
 - **`network-flow`** – documented network state, schema 1 and 2 (vault note
   `homelab-docs/projects/network-flow/Frontmatter für den Doku-Zustand.md`)
+- **`tasks`** – scheduled work that is not a backup, schema 1, defined by this plugin (vault note
+  `homelab-docs/projects/homelab-views/Frontmatter für geplante Aufgaben.md`)
 
-Both schemas are implemented strictly, including their validation: unknown fields, missing
+All schemas are implemented strictly, including their validation: unknown fields, missing
 required fields, wrong types and invalid values are shown per block with the field path and the
 reason. The plugin only **reads** frontmatter from Obsidian's metadata cache; it never writes to
 notes. Folders named `_privat` or `_private` are never read. All UI text is German.
@@ -32,6 +34,10 @@ top (or bottom) of the note, in reading view and Live Preview:
 - **Exceptions** (`type: ignore`): a dashed card “bewusst ausgenommen” with the location (`source`,
   only `pbs` or `longhorn`) and the reason (`why`). They have no schedule, no retention and no next
   run, and they never appear in the schedule.
+- **Scheduled tasks** (`tasks`): one dashed card per task, labelled by who starts it – **Host-Cron**
+  (a crontab line on a Proxmox node, VM or bare metal), **k3s-CronJob**, **Komodo** (scheduled
+  procedure or action) or **App-intern** (the app's own scheduler) – plus the kind (Neustart, Update,
+  Aufräumen, …), schedule, next run, duration and the command.
 - Validation problems appear at the bottom of the affected card.
 
 The automatic card can be switched off; a note that contains its own `homelab-card` block gets no
@@ -76,6 +82,9 @@ system: [pbs, restic]   # default: all
 path: homelab-docs/docs
 jobs: true
 view: both              # timeline | list | both
+tasks: true             # scheduled tasks (tasks frontmatter) next to the backups
+runner: [cron, k3s]     # only these task runners; default: all
+backups: true           # false: tasks only
 ```
 ````
 
@@ -94,6 +103,26 @@ path: homelab-docs/docs
 ```
 ````
 
+### `homelab-tasks`
+
+All scheduled tasks as a table, grouped by who starts them (Host-Cron, k3s-CronJob, Komodo,
+App-intern) with filter chips; within a group the next run comes first.
+
+````markdown
+```homelab-tasks
+runner: cron                  # cron, k3s, komodo, app; one or a list; default: all
+kind: [reboot, update]        # reboot, update, cleanup, check, maintenance, other
+path: homelab-docs/docs/vm
+group: true                   # false: one table with a Herkunft column
+```
+````
+
+Tasks also appear in `homelab-schedule`, as dashed bars in the colour of their runner and under
+their own legend heading “Aufgaben”, so they never read as a backup. A **reboot** that falls into a
+backup or job window of the same note is a *Kollision*; other tasks overlapping runs of the same
+note are an *Überschneidung*. Options there: `tasks: false` hides them, `runner: […]` filters
+them, `backups: false` shows only the tasks.
+
 ### `homelab-card`
 
 The card view placed by hand, for the current note or another one:
@@ -101,7 +130,7 @@ The card view placed by hand, for the current note or another one:
 ````markdown
 ```homelab-card
 note: "[[vm-docker-01]]"   # default: this note
-show: [network, backup]    # default: both
+show: [network, backup, tasks]   # default: all
 ```
 ````
 

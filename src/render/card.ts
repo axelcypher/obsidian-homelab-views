@@ -1,5 +1,5 @@
 /** Card view of one note: its network-flow resources and its backup blocks. */
-import { BackupEntry, HomelabIndex, NetworkEntry, NoteRef, backupTitle, errorCount, findResourceNote } from "../model/index";
+import { BackupEntry, HomelabIndex, NetworkEntry, NoteRef, TaskEntry, backupTitle, errorCount, findResourceNote, taskTitle } from "../model/index";
 import { addressSortKey, compareKeys } from "../model/ip";
 import type { NetworkResource } from "../model/network";
 import { formatDuration, labelRun, nextRun } from "../schedule/schedule";
@@ -7,6 +7,7 @@ import { breakable, el, txt } from "./dom";
 import type { RenderEnv } from "./env";
 import {
 	copyable,
+	durationText,
 	externalLink,
 	graceText,
 	graceUntil,
@@ -16,9 +17,13 @@ import {
 	locationView,
 	nextRunView,
 	retentionChips,
+	runnerBadge,
+	runnerClass,
+	runnerView,
 	scheduleText,
 	systemBadge,
 	systemClass,
+	taskKindBadge,
 	titleIsJob,
 	webUrl,
 } from "./common";
@@ -28,11 +33,13 @@ export interface CardData {
 	note: NoteRef;
 	backups: BackupEntry[];
 	network: NetworkEntry[];
+	tasks?: TaskEntry[];
 }
 
 export interface CardOptions {
 	network?: boolean;
 	backup?: boolean;
+	tasks?: boolean;
 }
 
 export function renderNoteCard(
@@ -63,7 +70,16 @@ export function renderNoteCard(
 		for (const e of data.backups) backupCard(grid, e, data.note, env);
 	}
 
-	if (!showNet && !showBackup) el(root, "div", { cls: "hv-empty", text: "Keine Homelab-Daten in dieser Notiz." });
+	const tasks = data.tasks ?? [];
+	const showTasks = opts.tasks !== false && tasks.length > 0;
+	if (showTasks) {
+		const section = el(root, "div", "hv-section hv-section-tasks");
+		taskSectionHead(section, tasks, env);
+		const grid = el(section, "div", "hv-bk-grid");
+		for (const e of tasks) taskCard(grid, e, env);
+	}
+
+	if (!showNet && !showBackup && !showTasks) el(root, "div", { cls: "hv-empty", text: "Keine Homelab-Daten in dieser Notiz." });
 	return root;
 }
 
@@ -427,4 +443,63 @@ function ignoreCard(parent: HTMLElement, e: BackupEntry, env: RenderEnv): HTMLEl
 	el(field(dl, "Grund"), "span", { text: b.why ?? "–" });
 	issuesView(card, e.issues, e.field, env);
 	return card;
+}
+
+// ---------------------------------------------------------------------------
+// Scheduled tasks (not backups)
+
+function taskSectionHead(parent: HTMLElement, tasks: TaskEntry[], env: RenderEnv): void {
+	const head = el(parent, "div", "hv-section-head");
+	icon(head, env, "calendar-clock", "hv-icon");
+	el(head, "span", { cls: "hv-section-title", text: "Geplante Aufgaben" });
+	el(head, "span", { cls: "hv-section-meta", text: plural(tasks.length, "Aufgabe", "Aufgaben") });
+	let soonest: { at: number; entry: TaskEntry } | undefined;
+	for (const e of tasks) {
+		const b = e.block;
+		if (!b.schedule || !b.tz) continue;
+		const n = nextRun(b.schedule, b.tz, env.now);
+		if (n.kind === "at" && (!soonest || n.at < soonest.at)) soonest = { at: n.at, entry: e };
+	}
+	if (soonest) {
+		const l = labelRun(soonest.at, soonest.entry.block.tz ?? env.displayTz, env.displayTz, env.now);
+		const next = el(head, "span", { cls: "hv-section-next" });
+		icon(next, env, "clock", "hv-icon hv-icon-xs");
+		el(next, "span", { text: `nächste ${l.day} ${l.time}` });
+		el(next, "span", { cls: "hv-faint", text: ` · ${soonest.entry.block.id ?? ""}` });
+	}
+}
+
+export function taskCard(parent: HTMLElement, e: TaskEntry, env: RenderEnv): HTMLElement {
+	const b = e.block;
+	const classes = ["hv-card", "hv-bk", "hv-task", runnerClass(b.runner?.kind)];
+	if (errorCount(e.issues)) classes.push("has-errors");
+	const card = el(parent, "div", classes.join(" "));
+	const head = el(card, "div", "hv-bk-head");
+	runnerBadge(head, b.runner?.kind, env);
+	taskKindBadge(head, b.kind);
+	el(card, "div", { cls: "hv-bk-title", text: taskTitle(b) });
+	el(card, "div", { cls: "hv-bk-id hv-mono", text: b.id ?? "ohne id", title: "id des Blocks" });
+
+	const dl = el(card, "div", "hv-fields");
+	runnerView(field(dl, "Gestartet von"), b.runner, env);
+	el(field(dl, "Zeitplan"), "span", { cls: b.schedule ? "hv-schedule" : "hv-faint", text: scheduleText(b) });
+	if (b.schedule?.kind === "every") el(field(dl, "Nächster Lauf"), "span", { cls: "hv-faint", text: "ohne feste Uhrzeit" });
+	else nextRunView(field(dl, "Nächster Lauf"), b, env);
+	if (b.durationMs !== undefined) {
+		const v = field(dl, "Dauer");
+		txt(v, durationText(b));
+		if (b.schedule && b.tz) {
+			const n = nextRun(b.schedule, b.tz, env.now);
+			if (n.kind === "at") el(v, "span", { cls: "hv-faint", text: ` · bis ${clockIn(n.at + b.durationMs, env)}` });
+		}
+	}
+	if (b.command) copyable(field(dl, "Befehl"), b.command, env, "hv-cmd", "path");
+	if (b.tz && b.tz !== env.displayTz) el(field(dl, "Zeitzone"), "span", { cls: "hv-mono", text: b.tz });
+
+	issuesView(card, e.issues, e.field, env);
+	return card;
+}
+
+function clockIn(at: number, env: RenderEnv): string {
+	return labelRun(at, env.displayTz, env.displayTz, env.now).time;
 }

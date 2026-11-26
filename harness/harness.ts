@@ -8,8 +8,9 @@ import { buildIndex, NoteRecord, noteRef } from "../src/core";
 import { renderNoteCard } from "../src/render/card";
 import { renderBackups } from "../src/render/backups";
 import { renderSchedule } from "../src/render/schedule";
+import { renderTasks } from "../src/render/tasks";
 import { renderNetwork } from "../src/render/network";
-import { backupsOptions, networkOptions, scheduleOptions } from "../src/render/options";
+import { backupsOptions, networkOptions, scheduleOptions, tasksOptions } from "../src/render/options";
 import type { RenderEnv } from "../src/render/env";
 import { el } from "../src/render/dom";
 
@@ -38,6 +39,12 @@ const ICONS: Record<string, string> = {
 	globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
 	lock: '<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
 	"corner-down-right": '<polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/>',
+	"calendar-clock":
+		'<path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h5"/><path d="M17.5 17.5 16 16.3V14"/><circle cx="16" cy="16" r="6"/>',
+	terminal: '<polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/>',
+	boxes:
+		'<path d="M7.97 4.42A2 2 0 0 0 7 6.13v4.37l5 3 5-3V6.13a2 2 0 0 0-.97-1.71l-3-1.8a2 2 0 0 0-2.06 0z"/><path d="M2.97 12.92A2 2 0 0 0 2 14.63v3.24a2 2 0 0 0 .97 1.71l3 1.8a2 2 0 0 0 2.06 0L12 19v-5.5l-5-3z"/><path d="M12 13.5V19l3.97 2.38a2 2 0 0 0 2.06 0l3-1.8a2 2 0 0 0 .97-1.71v-3.24a2 2 0 0 0-.97-1.71L17 10.5z"/>',
+	workflow: '<rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/>',
 };
 
 const params = new URLSearchParams(location.search);
@@ -98,6 +105,7 @@ function card(path: string) {
 	const head = header(note.name, [
 		["network-flow", "{…}"],
 		["backup", `${data?.backups.length ?? 0} Blöcke`],
+		["tasks", `${data?.tasks.length ?? 0} Blöcke`],
 	]);
 	const host = el(head, "div", "hv-auto-card is-top");
 	if (data) renderNoteCard(host, { note, ...data }, index, env);
@@ -133,7 +141,9 @@ else if (view === "backups-flat")
 		renderBackups(c, index.backups, env, backupsOptions({ group: false }).opts, {}),
 	);
 else if (view === "schedule")
-	block("Zeitplan", "homelab-schedule", (c) => renderSchedule(c, index.backups, env, scheduleOptions(null).opts, {}));
+	block("Zeitplan", "homelab-schedule", (c) => renderSchedule(c, index.backups, env, scheduleOptions(null).opts, {}, index.tasks));
+else if (view === "tasks")
+	block("Geplante Aufgaben", "homelab-tasks", (c) => renderTasks(c, index.tasks, env, tasksOptions(null).opts, {}));
 else if (view === "network")
 	block("Netzwerk", "homelab-network", (c) => renderNetwork(c, index.network, index, env, networkOptions(null).opts, {}));
 

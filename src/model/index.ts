@@ -6,6 +6,7 @@
 import { Issue } from "./check";
 import { BackupBlock, ParsedBackup, parseBackups, targetKey } from "./backup";
 import { NetworkResource, ParsedResource, parseNetwork } from "./network";
+import { ParsedTask, TaskBlock, parseTasks } from "./tasks";
 
 export interface NoteRecord {
 	path: string;
@@ -34,18 +35,25 @@ export interface NetworkEntry extends ParsedResource {
 	key: string;
 }
 
+export interface TaskEntry extends ParsedTask {
+	note: NoteRef;
+	key: string;
+}
+
 export interface HomelabIndex {
 	backups: BackupEntry[];
 	network: NetworkEntry[];
+	tasks: TaskEntry[];
 	/** Blocks by `id` (only ids that occur once) */
 	backupById: Map<string, BackupEntry>;
 	/** Resources by name (all kinds) */
 	networkByName: Map<string, NetworkEntry[]>;
-	byNote: Map<string, { backups: BackupEntry[]; network: NetworkEntry[] }>;
+	byNote: Map<string, { backups: BackupEntry[]; network: NetworkEntry[]; tasks: TaskEntry[] }>;
 }
 
 export const BACKUP_KEY = "backup";
 export const NETWORK_KEY = "network-flow";
+export const TASKS_KEY = "tasks";
 
 export function noteRef(path: string): NoteRef {
 	const file = path.split("/").pop() ?? path;
@@ -64,13 +72,14 @@ export function inFolder(path: string, folder: string): boolean {
 }
 
 export function hasHomelabData(fm: Record<string, unknown> | null | undefined): boolean {
-	return !!fm && (fm[BACKUP_KEY] !== undefined || fm[NETWORK_KEY] !== undefined);
+	return !!fm && (fm[BACKUP_KEY] !== undefined || fm[NETWORK_KEY] !== undefined || fm[TASKS_KEY] !== undefined);
 }
 
 export function buildIndex(records: NoteRecord[]): HomelabIndex {
 	const index: HomelabIndex = {
 		backups: [],
 		network: [],
+		tasks: [],
 		backupById: new Map(),
 		networkByName: new Map(),
 		byNote: new Map(),
@@ -93,12 +102,19 @@ export function buildIndex(records: NoteRecord[]): HomelabIndex {
 			note,
 			key: `${note.path}#nf${p.index}`,
 		}));
+		const tasks: TaskEntry[] = parseTasks(fm[TASKS_KEY]).map((p) => ({
+			...p,
+			note,
+			key: `${note.path}#t${p.index}`,
+		}));
 		index.backups.push(...backups);
 		index.network.push(...network);
-		index.byNote.set(note.path, { backups, network });
+		index.tasks.push(...tasks);
+		index.byNote.set(note.path, { backups, network, tasks });
 	}
 
 	checkBackupIds(index);
+	checkTaskIds(index);
 	checkNetwork(index);
 	return index;
 }
@@ -148,6 +164,21 @@ function checkBackupIds(index: HomelabIndex): void {
 		}
 		e.original = original;
 		original.copies.push(e);
+	}
+}
+
+function checkTaskIds(index: HomelabIndex): void {
+	const byId = new Map<string, TaskEntry[]>();
+	for (const e of index.tasks) {
+		if (!e.block.id) continue;
+		byId.set(e.block.id, [...(byId.get(e.block.id) ?? []), e]);
+	}
+	for (const [id, list] of byId) {
+		if (list.length < 2) continue;
+		for (const e of list) {
+			const others = list.filter((o) => o !== e).map(where).join(", ");
+			issue(e, "id", `doppelte id ${id}, auch in ${others}`);
+		}
 	}
 }
 
@@ -208,6 +239,11 @@ export function backupTitle(b: BackupBlock): string {
 	if (b.engine) return `${b.engine}-Dump`;
 	if (b.format) return `Kopie (${b.format})`;
 	return b.id ?? "ohne id";
+}
+
+/** Display title of a task: `what`, else the id. */
+export function taskTitle(b: TaskBlock): string {
+	return b.what ?? b.id ?? "ohne id";
 }
 
 export function jobLabel(job: string): string {

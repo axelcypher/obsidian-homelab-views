@@ -2,6 +2,7 @@
 import { BACKUP_SYSTEMS, BackupSystem } from "../model/backup";
 import { isObject } from "../model/check";
 import { ENTRIES } from "../model/network";
+import { TASK_KINDS, TASK_RUNNERS, TaskKind, TaskRunnerKind } from "../model/tasks";
 
 export interface CommonOptions {
 	/** Folder filter; may also point outside the root folder. */
@@ -18,6 +19,16 @@ export interface ScheduleOptions extends CommonOptions {
 	system?: BackupSystem[];
 	jobs: boolean;
 	view: "both" | "timeline" | "list";
+	/** Scheduled tasks (host cron, k3s CronJobs, Komodo, app-internal) next to the backups */
+	tasks: boolean;
+	runner?: TaskRunnerKind[];
+	backups: boolean;
+}
+
+export interface TasksOptions extends CommonOptions {
+	runner?: TaskRunnerKind[];
+	kind?: TaskKind[];
+	group: boolean;
 }
 
 export type NetworkSection = "machines" | "apps" | "subnets";
@@ -32,6 +43,7 @@ export interface CardBlockOptions {
 	note?: string;
 	network: boolean;
 	backup: boolean;
+	tasks: boolean;
 }
 
 export interface Parsed<T> {
@@ -103,7 +115,7 @@ export function backupsOptions(raw: unknown): Parsed<BackupsOptions> {
 export function scheduleOptions(raw: unknown): Parsed<ScheduleOptions> {
 	const problems: string[] = [];
 	const o = asObject(raw, problems);
-	unknown(o, ["system", "path", "jobs", "view"], problems);
+	unknown(o, ["system", "path", "jobs", "view", "tasks", "runner", "backups"], problems);
 	const view = strings(o.view, ["both", "timeline", "list"] as const, "view", problems)?.[0] ?? "both";
 	return {
 		opts: {
@@ -111,6 +123,24 @@ export function scheduleOptions(raw: unknown): Parsed<ScheduleOptions> {
 			path: path(o.path, problems),
 			jobs: bool(o.jobs, "jobs", true, problems),
 			view,
+			tasks: bool(o.tasks, "tasks", true, problems),
+			runner: strings(o.runner, TASK_RUNNERS, "runner", problems),
+			backups: bool(o.backups, "backups", true, problems),
+		},
+		problems,
+	};
+}
+
+export function tasksOptions(raw: unknown): Parsed<TasksOptions> {
+	const problems: string[] = [];
+	const o = asObject(raw, problems);
+	unknown(o, ["runner", "kind", "path", "group"], problems);
+	return {
+		opts: {
+			runner: strings(o.runner, TASK_RUNNERS, "runner", problems),
+			kind: strings(o.kind, TASK_KINDS, "kind", problems),
+			path: path(o.path, problems),
+			group: bool(o.group, "group", true, problems),
 		},
 		problems,
 	};
@@ -136,7 +166,7 @@ export function cardOptions(raw: unknown): Parsed<CardBlockOptions> {
 	const problems: string[] = [];
 	const o = asObject(raw, problems);
 	unknown(o, ["note", "show"], problems);
-	const show = strings(o.show, ["network", "backup"] as const, "show", problems);
+	const show = strings(o.show, ["network", "backup", "tasks"] as const, "show", problems);
 	let note: string | undefined;
 	if (typeof o.note === "string") note = o.note.trim().replace(/^\[\[|\]\]$/g, "").split("|")[0];
 	// YAML reads an unquoted [[Note]] as a nested list
@@ -147,6 +177,7 @@ export function cardOptions(raw: unknown): Parsed<CardBlockOptions> {
 			note,
 			network: show ? show.includes("network") : true,
 			backup: show ? show.includes("backup") : true,
+			tasks: show ? show.includes("tasks") : true,
 		},
 		problems,
 	};

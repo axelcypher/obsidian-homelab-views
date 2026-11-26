@@ -6,11 +6,12 @@ import { NoteRef, inFolder, isPrivatePath, noteRef } from "./model/index";
 import { clear, el } from "./render/dom";
 import type { RenderEnv, ViewState } from "./render/env";
 import { optionNotice } from "./render/common";
-import { backupsOptions, cardOptions, networkOptions, scheduleOptions } from "./render/options";
+import { backupsOptions, cardOptions, networkOptions, scheduleOptions, tasksOptions } from "./render/options";
 import { renderBackups } from "./render/backups";
 import { renderSchedule } from "./render/schedule";
 import { renderNetwork } from "./render/network";
 import { renderNoteCard } from "./render/card";
+import { renderTasks } from "./render/tasks";
 
 const HOVER_SOURCE = "axlc-homelab-views";
 
@@ -20,7 +21,7 @@ const ICON_FALLBACK: Record<string, string> = {
 	"app-window": "app-window-mac",
 };
 
-export const BLOCKS = ["homelab-backups", "homelab-schedule", "homelab-network", "homelab-card"] as const;
+export const BLOCKS = ["homelab-backups", "homelab-schedule", "homelab-tasks", "homelab-network", "homelab-card"] as const;
 type BlockKind = (typeof BLOCKS)[number];
 
 export default class HomelabViewsPlugin extends Plugin {
@@ -171,7 +172,7 @@ export default class HomelabViewsPlugin extends Plugin {
 			const index = store.indexForNote(path);
 			const data = index.byNote.get(path);
 			if (!data) {
-				el(container, "div", { cls: "hv-root hv-empty", text: `Keine backup- oder network-flow-Daten in „${noteRef(path).name}“.` });
+				el(container, "div", { cls: "hv-root hv-empty", text: `Keine backup-, tasks- oder network-flow-Daten in „${noteRef(path).name}“.` });
 				return;
 			}
 			renderNoteCard(container, { note: noteRef(path), ...data }, index, env, opts);
@@ -189,6 +190,14 @@ export default class HomelabViewsPlugin extends Plugin {
 
 		const backupsIn = (path: string | undefined) =>
 			store.index(store.baseFolder(path)).backups.filter((e) => !path || inFolder(e.note.path, path));
+		const tasksIn = (path: string | undefined) =>
+			store.index(store.baseFolder(path)).tasks.filter((e) => !path || inFolder(e.note.path, path));
+		if (kind === "homelab-tasks") {
+			const { opts, problems } = tasksOptions(raw);
+			optionNotice(container, problems, env);
+			renderTasks(container, tasksIn(opts.path), env, opts, state);
+			return;
+		}
 		if (kind === "homelab-backups") {
 			const { opts, problems } = backupsOptions(raw);
 			optionNotice(container, problems, env);
@@ -196,7 +205,7 @@ export default class HomelabViewsPlugin extends Plugin {
 		} else {
 			const { opts, problems } = scheduleOptions(raw);
 			optionNotice(container, problems, env);
-			renderSchedule(container, backupsIn(opts.path), env, opts, state);
+			renderSchedule(container, backupsIn(opts.path), env, opts, state, tasksIn(opts.path));
 		}
 	}
 }
