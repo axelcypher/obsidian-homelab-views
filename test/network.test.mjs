@@ -274,3 +274,14 @@ port-types: {gi19: combo, gi20: combo}
 		assert.deepEqual(issuesOf(`${SW}ports:\n  - {port: Po1, pvid: 1, vlans: {untagged: [1], tagged: [2]}}\n`), []);
 	});
 });
+
+describe("network-flow schema 4: poe", () => {
+	test("poe lists connectors of the view, once each", () => {
+		const [p] = parseNetwork(y("{schema: 4, kind: device, name: hpe, type: switch, front: [[1, 2, 3, 4, null, 5, 6, 7, 8]], poe: [1, 2, 3, 4]}"));
+		assert.deepEqual(p.issues, []);
+		assert.deepEqual(p.res.poe, ["1", "2", "3", "4"]);
+		assert.match(find(issuesOf("{schema: 4, kind: device, name: h, type: switch, front: [[1, 2]], poe: [1, 9]}"), "network-flow.poe[1]").message, /weder in front noch in back/);
+		assert.match(find(issuesOf("{schema: 4, kind: device, name: h, type: switch, front: [[1, 2]], poe: [1, 1]}"), "network-flow.poe[1]").message, /doppelt/);
+		assert.match(find(issuesOf("{schema: 3, kind: device, name: h, type: switch, poe: [1]}"), "network-flow.poe").message, /erst ab schema: 4/);
+	});
+});

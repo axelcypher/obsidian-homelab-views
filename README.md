@@ -28,7 +28,7 @@ top (or bottom) of the note, in reading view and Live Preview:
   `Netzwerk-Grundregeln`: lowest-numbered subnet whose role has a card, or `home` when set),
   network cards (schema 3, also cards without an IP, with the matching address), switch port VLANs
   (PVID, untagged, tagged), the **front and back view** (schema 4: rows of connectors with gaps,
-  SFP/combo/USB/power drawn differently, linked ports highlighted, VLANs and connection on hover),
+  SFP/combo/USB/power drawn differently, PoE ports marked, linked ports highlighted, VLANs and connection on hover),
   web interface, rack and connections; apps with their hostnames, entry
   badge (Internet / Intern / Internet + intern, Cloudflare), target, Traefik instance, ports and
   `runs-on` linked to the machine's note; clusters, subnets, sites and racks.

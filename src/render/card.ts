@@ -605,7 +605,8 @@ function frontPanel(body: HTMLElement, r: NetworkResource): void {
 				const c = conn.get(name);
 				const v = vlans.get(name);
 				const i = ifaces.get(name);
-				const tip = [`${name} · ${PORT_TYPE_LABEL[type] ?? type}`];
+				const poe = r.poe?.includes(name) ?? false;
+				const tip = [`${name} · ${PORT_TYPE_LABEL[type] ?? type}${poe ? " · PoE" : ""}`];
 				if (c) tip.push(`→ ${c.to ?? "?"}${c.kind ? ` (${CONNECTION_LABEL[c.kind] ?? c.kind})` : ""}`);
 				if (v) {
 					const fmt = (ids?: number[]) => (ids === undefined ? "–" : ids.length ? ids.join(", ") : "keine");
@@ -614,6 +615,7 @@ function frontPanel(body: HTMLElement, r: NetworkResource): void {
 				if (i) tip.push([i.subnet, i.vlan === null ? "ohne Tag" : i.vlan !== undefined ? `VLAN ${i.vlan}` : "", i.mac].filter(Boolean).join(" · "));
 				const cls = ["hv-port-cell", `is-${type.replace("+", "-plus")}`];
 				if (c) cls.push("is-linked");
+				if (poe) cls.push("has-poe");
 				const cell = el(line, "span", { cls: cls.join(" "), title: tip.join("\n") });
 				const label = type === "inlet" || type === "outlet" ? "AC" : type === "usb" ? "" : name.replace(/^(gi|ge|eth|port)/i, "") || name;
 				el(cell, "span", { cls: "hv-port-label", text: label });

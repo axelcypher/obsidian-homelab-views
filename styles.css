@@ -908,3 +908,14 @@ input.hv-invalid { border-color: var(--text-error) !important; }
 .hv-port-cell.is-inlet,
 .hv-port-cell.is-outlet { width: 26px; height: 26px; border-radius: 50%; font-size: 9px; }
 .hv-port-label { pointer-events: none; }
+.hv-port-cell { position: relative; }
+.hv-port-cell.has-poe::after {
+	content: "";
+	position: absolute;
+	top: 2px;
+	right: 2px;
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	background: var(--color-yellow);
+}

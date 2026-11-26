@@ -110,6 +110,8 @@ export interface NetworkResource {
 	back?: (string | null)[][];
 	/** schema 4: type per connector that is not RJ45 */
 	portTypes?: Record<string, string>;
+	/** schema 4: connectors with PoE */
+	poe?: string[];
 	macs?: string[];
 	webInterface?: string;
 	rack?: RackPlace;
@@ -140,8 +142,8 @@ export interface ParsedResource {
 
 const KIND_KEYS: Record<NetworkKind, readonly string[]> = {
 	app: ["runs-on", "hostnames", "ports"],
-	machine: ["type", "host", "cluster", "addresses", "interfaces", "home", "web-interface", "rack", "connections", "front", "back", "port-types"],
-	device: ["type", "addresses", "interfaces", "home", "macs", "ports", "rack", "web-interface", "connections", "front", "back", "port-types"],
+	machine: ["type", "host", "cluster", "addresses", "interfaces", "home", "web-interface", "rack", "connections", "front", "back", "port-types", "poe"],
+	device: ["type", "addresses", "interfaces", "home", "macs", "ports", "rack", "web-interface", "connections", "front", "back", "port-types", "poe"],
 	cluster: ["machines", "lb-ips"],
 	subnet: ["network", "vlan", "medium", "role"],
 	site: ["subnet"],
@@ -156,8 +158,8 @@ const SCHEMA3_KEYS: Partial<Record<NetworkKind, readonly string[]>> = {
 };
 /** Keys that only exist from schema 4 on, per kind. */
 const SCHEMA4_KEYS: Partial<Record<NetworkKind, readonly string[]>> = {
-	machine: ["front", "back", "port-types"],
-	device: ["front", "back", "port-types"],
+	machine: ["front", "back", "port-types", "poe"],
+	device: ["front", "back", "port-types", "poe"],
 };
 const HOST_PORT_MSG = "erwartet adresse:port, z. B. 10.20.0.50:443 (IPv6 in eckigen Klammern)";
 
@@ -512,6 +514,21 @@ function frontView(raw: Raw, c: Checker, res: NetworkResource): void {
 				continue;
 			}
 			res.portTypes[name] = type;
+		}
+	}
+	if (raw.poe !== undefined) {
+		const items = c.list(raw, "poe");
+		if (items) {
+			const out: string[] = [];
+			items.forEach((x, i) => {
+				const f = `poe[${i}]`;
+				if (typeof x !== "string" && typeof x !== "number") return c.wrongType(f, "der Name eines Anschlusses", x);
+				const name = String(x).trim();
+				if (!seen.has(name)) return c.error(f, `${show(name)} steht weder in front noch in back`);
+				if (out.includes(name)) return c.error(f, `${show(name)} steht doppelt`);
+				out.push(name);
+			});
+			res.poe = out;
 		}
 	}
 }
