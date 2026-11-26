@@ -110,6 +110,19 @@ export const TYPE_LABEL: Record<string, string> = {
 	other: "Sonstiges",
 };
 
+export const ROLE_LABEL: Record<string, string> = {
+	management: "Management",
+	admin: "Admin-Ebene",
+	server: "Server",
+	iot: "IoT",
+	clients: "Endgeräte",
+	guest: "Gäste",
+	development: "Entwicklung",
+	gameserver: "Gameserver",
+	storage: "Backup/Storage",
+	vpn: "VPN",
+};
+
 export const ENTRY_LABEL: Record<string, string> = {
 	internet: "Internet",
 	intern: "Intern",

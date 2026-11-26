@@ -5,7 +5,7 @@
  */
 import { Issue } from "./check";
 import { BackupBlock, ParsedBackup, parseBackups, targetKey } from "./backup";
-import { NetworkResource, ParsedResource, parseNetwork } from "./network";
+import { NO_CARD_ROLES, NetworkResource, ParsedResource, parseNetwork } from "./network";
 import { ParsedTask, TaskBlock, parseTasks } from "./tasks";
 
 export interface NoteRecord {
@@ -254,4 +254,27 @@ export function jobLabel(job: string): string {
 export function findResourceNote(index: HomelabIndex, name: string, kinds: NetworkResource["kind"][]): NoteRef | undefined {
 	const list = index.networkByName.get(name);
 	return list?.find((e) => kinds.includes(e.res.kind))?.note;
+}
+
+/**
+ * Home subnet of a machine or device (Netzwerk-Grundregeln R1): `home` when set, else the
+ * subnet with the lowest number (second octet) among its addresses and cards, leaving out
+ * subnets whose role has no card (management, storage). Needs the subnets' `role` (schema 3);
+ * undefined when nothing is known.
+ */
+export function homeSubnet(index: HomelabIndex, res: NetworkResource): { name: string; explicit: boolean } | undefined {
+	if (res.home) return { name: res.home, explicit: true };
+	const subnet = (name: string) => index.networkByName.get(name)?.find((e) => e.res.kind === "subnet")?.res;
+	const names = new Set<string>();
+	for (const a of res.addresses ?? []) if (a.subnet) names.add(a.subnet);
+	for (const i of res.interfaces ?? []) if (i.subnet) names.add(i.subnet);
+	let best: { name: string; n: number } | undefined;
+	for (const name of names) {
+		const s = subnet(name);
+		if (!s?.role || NO_CARD_ROLES.includes(s.role)) continue;
+		const n = Number(s.network?.split(".")[1] ?? NaN);
+		const num = Number.isFinite(n) ? n : 999;
+		if (!best || num < best.n) best = { name, n: num };
+	}
+	return best ? { name: best.name, explicit: false } : undefined;
 }

@@ -1,12 +1,13 @@
 /** `homelab-network`: machines and devices, apps by hostname, subnets – sortable, IPs numerically. */
-import { HomelabIndex, NetworkEntry, NoteRef, errorCount, findResourceNote } from "../model/index";
+import { HomelabIndex, NetworkEntry, NoteRef, errorCount, findResourceNote, homeSubnet } from "../model/index";
 import { addressSortKey, compareKeys } from "../model/ip";
+import { NO_CARD_ROLES } from "../model/network";
 import type { Address, Hostname, NetworkResource } from "../model/network";
 import { el, txt } from "./dom";
 import type { RenderEnv, ViewState } from "./env";
 import { copyable, emptyState, externalLink, issueMarker, problemsSection, webUrl } from "./common";
 import { entryBadge } from "./card";
-import { ENTRY_LABEL, KIND_LABEL, TYPE_LABEL, plural } from "./labels";
+import { ENTRY_LABEL, KIND_LABEL, ROLE_LABEL, TYPE_LABEL, plural } from "./labels";
 import type { NetworkOptions } from "./options";
 import { Column, sortableTable } from "./table";
 
@@ -117,6 +118,18 @@ export function renderNetwork(
 							else el(line, "span", { cls: "hv-faint", text: "–" });
 						}),
 					sort: (e) => sortedAddresses(e)[0]?.mac ?? "",
+				},
+				{
+					key: "home",
+					label: "Heimnetz",
+					cls: "hv-nowrap",
+					render: (td, e) => {
+						const h = homeSubnet(index, e.res);
+						if (!h) return void el(td, "span", { cls: "hv-faint", text: "–" });
+						el(td, "span", { text: h.name, title: h.explicit ? "im Frontmatter gesetzt (home)" : "nach R1 abgeleitet" });
+						if (h.explicit) el(td, "div", { cls: "hv-faint", text: "gesetzt" });
+					},
+					sort: (e) => homeSubnet(index, e.res)?.name ?? "",
 				},
 				{
 					key: "web",
@@ -244,6 +257,16 @@ export function renderNetwork(
 					sort: (e) => (e.res.vlan === null ? 0 : e.res.vlan),
 				},
 				{ key: "medium", label: "Medium", render: (td, e) => void (td.textContent = e.res.medium ?? "–"), sort: (e) => e.res.medium ?? "" },
+				{
+					key: "role",
+					label: "Rolle",
+					render: (td, e) => {
+						if (!e.res.role) return void el(td, "span", { cls: "hv-faint", text: "–" });
+						txt(td, ROLE_LABEL[e.res.role] ?? e.res.role);
+						if (NO_CARD_ROLES.includes(e.res.role)) el(td, "div", { cls: "hv-faint", text: "keine eigene Karte" });
+					},
+					sort: (e) => e.res.role ?? "",
+				},
 			];
 			sortableTable(s, subnets, cols, state, "sortSubnets", { initial: { key: "network", dir: 1 }, tableClass: "hv-subnet-table" });
 		}

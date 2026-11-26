@@ -15,24 +15,27 @@ network-flow:
       - ip: 10.10.0.1
         subnet: beispiel-wg
     web-interface: 10.20.0.1:8443
-  - schema: 1
+  - schema: 3
     kind: subnet
     name: lan
     network: 10.20.0.0/16
     vlan: 8
     medium: LAN
-  - schema: 1
+    role: server
+  - schema: 3
     kind: subnet
     name: backup
     network: 10.50.0.0/24
     vlan: 5
     medium: LAN
-  - schema: 1
+    role: storage
+  - schema: 3
     kind: subnet
     name: beispiel-wg
     network: 10.10.0.0/24
     vlan: null
     medium: WireGuard
+    role: vpn
   - schema: 1
     kind: site
     name: Beispielstandort

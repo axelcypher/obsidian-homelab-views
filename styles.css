@@ -864,3 +864,6 @@ input.hv-invalid { border-color: var(--text-error) !important; }
 .hv-tl-bar.is-task:hover { background: rgba(var(--hv-c-rgb), 0.24); }
 .hv-tl-bar.is-task.is-point { width: 7px !important; border-style: solid; background: transparent; }
 .hv-task-row td:first-child { box-shadow: inset 2px 0 0 0 transparent; }
+
+/* Tables inside a card body (network cards, switch ports): own frame, space to what follows */
+.hv-table-wrap.hv-card-table { margin: 4px 0 12px; }

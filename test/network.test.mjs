@@ -143,7 +143,7 @@ describe("network-flow: errors", () => {
 		assert.match(find(issuesOf("{schema: 1, kind: device, name: x, type: nas, rack: {name: W, position: 3}}"), "network-flow.rack").message, /erst ab schema: 2/);
 		assert.deepEqual(issuesOf("{schema: 1, kind: device, name: x, type: nas, rack: Wandschrank}"), []);
 		assert.match(find(issuesOf("{schema: 1, kind: rack, name: W, units: 12}"), "network-flow.kind").message, /erst ab schema: 2/);
-		assert.match(find(issuesOf("{schema: 3, kind: site, name: S}"), "network-flow.schema").message, /Version 3 ist unbekannt/);
+		assert.match(find(issuesOf("{schema: 4, kind: site, name: S}"), "network-flow.schema").message, /Version 4 ist unbekannt/);
 	});
 
 	test("rack placement rules", () => {
@@ -171,5 +171,72 @@ describe("network-flow: errors", () => {
 		assert.ok(find(issuesOf("{schema: 1, kind: app, name: x, runs-on: [a], ports: [{port: 70000, protocol: tcp}]}"), "network-flow.ports[0].port"));
 		assert.ok(find(issuesOf("{schema: 1, kind: app, name: x, runs-on: [a], ports: [{port: 80, protocol: http}]}"), "network-flow.ports[0].protocol"));
 		assert.ok(find(issuesOf("{schema: 2, kind: device, name: x, type: switch, connections: [{port: g1, to: opnsense, kind: copper}]}"), "network-flow.connections[0].to"));
+	});
+});
+
+describe("network-flow schema 3", () => {
+	const VM = `
+schema: 3
+kind: machine
+name: k3s-misato-01
+type: vm
+host: sol
+addresses:
+  - {ip: 10.8.0.35, subnet: oxygen, mac: "bc:24:11:ea:35:08", iface: enp6s18}
+  - {ip: 10.1.0.35, subnet: hydrogen, mac: "bc:24:11:ea:35:01", iface: enp6s19}
+interfaces:
+  - {name: net0, mac: "bc:24:11:ea:35:08", subnet: oxygen, vlan: 8}
+  - {name: net1, mac: "bc:24:11:ea:35:01", subnet: hydrogen, vlan: null}
+  - {name: net3, mac: "bc:24:11:ea:35:09", subnet: fluorite, vlan: 9}
+`;
+	test("a VM with interfaces, iface and an interface without IP is valid", () => {
+		const [p] = parseNetwork(y(VM));
+		assert.deepEqual(p.issues, []);
+		assert.equal(p.res.schema, 3);
+		assert.equal(p.res.addresses[0].iface, "enp6s18");
+		assert.deepEqual(p.res.interfaces[1], { name: "net1", mac: "bc:24:11:ea:35:01", subnet: "hydrogen", vlan: null });
+		assert.equal(p.res.interfaces[2].vlan, 9);
+	});
+	test("subnet role, device home and switch ports", () => {
+		const parsed = parseNetwork(
+			y(`
+- {schema: 3, kind: subnet, name: hydrogen, network: 10.1.0.0/24, vlan: null, medium: LAN, role: management}
+- schema: 3
+  kind: device
+  name: sg300
+  type: switch
+  home: beryllium
+  ports:
+    - {port: Po1, pvid: 1, vlans: {untagged: [1], tagged: [2, 3, 4, 5, 6, 8, 9, 23, 199]}}
+    - {port: 5, pvid: 4, vlans: {untagged: [4], tagged: []}}
+`),
+		);
+		assert.deepEqual(parsed.flatMap((p) => p.issues), []);
+		assert.equal(parsed[0].res.role, "management");
+		assert.equal(parsed[1].res.home, "beryllium");
+		assert.deepEqual(parsed[1].res.switchPorts[1], { port: "5", pvid: 4, untagged: [4], tagged: [] });
+	});
+	test("duplicate card, duplicate port and a VLAN twice at a port are errors", () => {
+		const card = issuesOf(VM.replace("name: net3", "name: net0"));
+		assert.match(find(card, "network-flow.interfaces[2].name").message, /doppelt/);
+		const ports = issuesOf("{schema: 3, kind: device, name: s, type: switch, ports: [{port: 5}, {port: 5}]}");
+		assert.match(find(ports, "network-flow.ports[1].port").message, /doppelt/);
+		const vlan = issuesOf("{schema: 3, kind: device, name: s, type: switch, ports: [{port: 5, vlans: {untagged: [4], tagged: [4, 8, 8]}}]}");
+		assert.match(find(vlan, "network-flow.ports[0].vlans.tagged[0]").message, /schon in untagged/);
+		assert.match(find(vlan, "network-flow.ports[0].vlans.tagged[2]").message, /doppelt/);
+	});
+	test("unknown role, vlan out of range", () => {
+		assert.ok(find(issuesOf("{schema: 3, kind: subnet, name: x, network: 10.0.0.0/24, role: dmz}"), "network-flow.role"));
+		assert.ok(find(issuesOf(VM.replace("vlan: 9", "vlan: 5000")), "network-flow.interfaces[2].vlan"));
+	});
+	test("the new fields in schema 1 or 2 point to schema 3", () => {
+		assert.match(find(issuesOf(VM.replace("schema: 3", "schema: 2")), "network-flow.interfaces").message, /erst ab schema: 3/);
+		assert.match(find(issuesOf(VM.replace("schema: 3", "schema: 2")), "network-flow.addresses[0].iface").message, /erst ab schema: 3/);
+		assert.match(find(issuesOf("{schema: 1, kind: subnet, name: x, network: 10.0.0.0/24, role: server}"), "network-flow.role").message, /erst ab schema: 3/);
+		assert.match(find(issuesOf("{schema: 2, kind: device, name: s, type: switch, ports: []}"), "network-flow.ports").message, /erst ab schema: 3/);
+	});
+	test("schema 3 keeps the schema 2 features (path, rack objects)", () => {
+		assert.deepEqual(issuesOf("{schema: 3, kind: machine, name: x, type: host, rack: {name: W, position: 3}}"), []);
+		assert.deepEqual(issuesOf("{schema: 3, kind: app, name: x, runs-on: [a], hostnames: [{name: a.b, entry: intern, target: 'a.b:80', path: /x}]}"), []);
 	});
 });

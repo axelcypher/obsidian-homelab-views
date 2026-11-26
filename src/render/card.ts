@@ -1,6 +1,7 @@
 /** Card view of one note: its network-flow resources and its backup blocks. */
-import { BackupEntry, HomelabIndex, NetworkEntry, NoteRef, TaskEntry, backupTitle, errorCount, findResourceNote, taskTitle } from "../model/index";
+import { BackupEntry, HomelabIndex, NetworkEntry, NoteRef, TaskEntry, backupTitle, errorCount, findResourceNote, homeSubnet, taskTitle } from "../model/index";
 import { addressSortKey, compareKeys } from "../model/ip";
+import { NO_CARD_ROLES } from "../model/network";
 import type { NetworkResource } from "../model/network";
 import { formatDuration, labelRun, nextRun } from "../schedule/schedule";
 import { breakable, el, txt } from "./dom";
@@ -27,7 +28,7 @@ import {
 	titleIsJob,
 	webUrl,
 } from "./common";
-import { CONNECTION_LABEL, ENTRY_LABEL, KIND_ICON, KIND_LABEL, TYPE_LABEL, plural } from "./labels";
+import { CONNECTION_LABEL, ENTRY_LABEL, KIND_ICON, KIND_LABEL, ROLE_LABEL, TYPE_LABEL, plural } from "./labels";
 
 export interface CardData {
 	note: NoteRef;
@@ -141,6 +142,15 @@ function networkCard(parent: HTMLElement, e: NetworkEntry, index: HomelabIndex, 
 			noteLinkOrText(sub, cluster, index, env, ["cluster"]);
 		});
 	}
+	if (r.kind === "machine" || r.kind === "device") {
+		const home = homeSubnet(index, r);
+		if (home)
+			bits.push(() => {
+				el(sub, "span", { cls: "hv-sub-k", text: "Heimnetz " });
+				el(sub, "span", { text: home.name, title: home.explicit ? "im Frontmatter gesetzt (home)" : "nach R1 abgeleitet" });
+				if (home.explicit) el(sub, "span", { cls: "hv-faint", text: " (gesetzt)" });
+			});
+	}
 	if (r.kind === "site" && r.subnet) bits.push(() => txt(sub, `Netz ${r.subnet}`));
 	if (r.kind === "rack" && r.site) bits.push(() => txt(sub, `Standort ${r.site}`));
 	bits.forEach((b, i) => {
@@ -158,11 +168,15 @@ function networkCard(parent: HTMLElement, e: NetworkEntry, index: HomelabIndex, 
 		for (const a of sorted) {
 			const row = el(list, "div", "hv-addr");
 			copyable(row, a.ip, env, "hv-addr-ip");
-			el(row, "span", { cls: "hv-addr-subnet", text: a.subnet ?? "" });
+			const sn = el(row, "span", { cls: "hv-addr-subnet", text: a.subnet ?? "" });
+			if (a.iface) el(sn, "span", { cls: "hv-faint hv-mono", text: ` ${a.iface}`, title: "Netzwerkkarte im Gast" });
 			if (a.mac) copyable(row, a.mac.toLowerCase(), env, "hv-addr-mac");
 			else el(row, "span", { cls: "hv-addr-mac hv-faint", text: "–" });
 		}
 	}
+
+	if (r.interfaces?.length) interfacesTable(body, r, env);
+	if (r.switchPorts?.length) switchPortsTable(body, r);
 
 	if (r.kind === "app") appBody(body, r, env);
 
@@ -307,7 +321,8 @@ function subnetCard(parent: HTMLElement, subnets: NetworkEntry[], env: RenderEnv
 	const wrap = el(card, "div", "hv-table-wrap is-flush");
 	const table = el(wrap, "table", "hv-table is-compact");
 	const tr = el(el(table, "thead"), "tr");
-	for (const h of ["Name", "Netz", "VLAN", "Medium"]) el(tr, "th", { text: h });
+	const withRole = subnets.some((s) => s.res.role);
+	for (const h of ["Name", "Netz", "VLAN", "Medium", ...(withRole ? ["Rolle"] : [])]) el(tr, "th", { text: h });
 	const tbody = el(table, "tbody");
 	const sorted = [...subnets].sort((a, b) =>
 		compareKeys(addressSortKey(a.res.network?.split("/")[0]), addressSortKey(b.res.network?.split("/")[0])),
@@ -319,6 +334,10 @@ function subnetCard(parent: HTMLElement, subnets: NetworkEntry[], env: RenderEnv
 		if (s.res.network) copyable(net, s.res.network, env);
 		el(r, "td", { cls: "hv-num", text: s.res.vlan === null ? "ohne Tag" : s.res.vlan === undefined ? "–" : String(s.res.vlan) });
 		el(r, "td", { text: s.res.medium ?? "–" });
+		if (withRole) {
+			const role = el(r, "td", { text: s.res.role ? ROLE_LABEL[s.res.role] ?? s.res.role : "–" });
+			if (s.res.role && NO_CARD_ROLES.includes(s.res.role)) role.classList.add("hv-faint");
+		}
 	}
 	const issues = subnets.flatMap((s) => s.issues);
 	issuesView(card, issues, "", env);
@@ -502,4 +521,52 @@ export function taskCard(parent: HTMLElement, e: TaskEntry, env: RenderEnv): HTM
 
 function clockIn(at: number, env: RenderEnv): string {
 	return labelRun(at, env.displayTz, env.displayTz, env.now).time;
+}
+
+// ---------------------------------------------------------------------------
+// Schema 3: network cards and switch ports
+
+/** Network cards (Proxmox names for VMs), with the address that belongs to each (same MAC and subnet). */
+function interfacesTable(body: HTMLElement, r: NetworkResource, env: RenderEnv): void {
+	const list = r.interfaces ?? [];
+	el(body, "div", { cls: "hv-label", text: list.length === 1 ? "Netzwerkkarte" : `Netzwerkkarten (${list.length})` });
+	const wrap = el(body, "div", "hv-table-wrap hv-card-table");
+	const table = el(wrap, "table", "hv-table is-compact hv-iface-table");
+	const head = el(el(table, "thead"), "tr");
+	for (const h of ["Karte", "Netz", "VLAN", "MAC", "IP"]) el(head, "th", { text: h });
+	const tbody = el(table, "tbody");
+	for (const i of list) {
+		const tr = el(tbody, "tr");
+		el(tr, "td", { cls: "hv-mono hv-strong", text: i.name });
+		el(tr, "td", { text: i.subnet ?? "–" });
+		el(tr, "td", { cls: "hv-num", text: i.vlan === null ? "ohne Tag" : i.vlan === undefined ? "–" : String(i.vlan) });
+		const mac = el(tr, "td");
+		if (i.mac) copyable(mac, i.mac.toLowerCase(), env);
+		else el(mac, "span", { cls: "hv-faint", text: "–" });
+		const ipTd = el(tr, "td");
+		const addr = (r.addresses ?? []).find(
+			(a) => !!a.mac && !!i.mac && a.mac.toLowerCase() === i.mac.toLowerCase() && (!i.subnet || a.subnet === i.subnet),
+		);
+		if (addr) copyable(ipTd, addr.ip, env);
+		else el(ipTd, "span", { cls: "hv-faint", text: i.subnet ? "keine IP" : "–" });
+	}
+}
+
+/** VLANs of switch ports (Soll for the SNMP comparison in network-flow). */
+function switchPortsTable(body: HTMLElement, r: NetworkResource): void {
+	const list = r.switchPorts ?? [];
+	el(body, "div", { cls: "hv-label", text: `Ports (${list.length})` });
+	const wrap = el(body, "div", "hv-table-wrap hv-card-table");
+	const table = el(wrap, "table", "hv-table is-compact hv-port-table");
+	const head = el(el(table, "thead"), "tr");
+	for (const h of ["Port", "PVID", "ungetaggt", "getaggt"]) el(head, "th", { text: h });
+	const tbody = el(table, "tbody");
+	const fmt = (ids: number[] | undefined) => (ids === undefined ? "–" : ids.length ? ids.join(", ") : "keine");
+	for (const p of list) {
+		const tr = el(tbody, "tr");
+		el(tr, "td", { cls: "hv-mono hv-strong", text: p.port });
+		el(tr, "td", { cls: "hv-num", text: p.pvid === undefined ? "–" : String(p.pvid) });
+		el(tr, "td", { cls: "hv-mono", text: fmt(p.untagged) });
+		el(tr, "td", { cls: "hv-mono", text: fmt(p.tagged) });
+	}
 }

@@ -8,7 +8,7 @@ schedule – without Dataview or Bases. It reads three frontmatter keys:
 
 - **`backup`** – backup blocks, schema 1 (vault note
   `homelab-docs/projects/backup-ui/Frontmatter für Backups.md`)
-- **`network-flow`** – documented network state, schema 1 and 2 (vault note
+- **`network-flow`** – documented network state, schema 1, 2 and 3 (vault note
   `homelab-docs/projects/network-flow/Frontmatter für den Doku-Zustand.md`)
 - **`tasks`** – scheduled work that is not a backup, schema 1, defined by this plugin (vault note
   `homelab-docs/projects/homelab-views/Frontmatter für geplante Aufgaben.md`)
@@ -23,8 +23,11 @@ notes. Folders named `_privat` or `_private` are never read. All UI text is Germ
 Every note with `backup` and/or `network-flow` frontmatter shows a card view of its own data at the
 top (or bottom) of the note, in reading view and Live Preview:
 
-- **Network:** machines and devices with their addresses (IP, subnet, MAC – monospace, click to
-  copy), host, cluster, web interface, rack and connections; apps with their hostnames, entry
+- **Network:** machines and devices with their addresses (IP, subnet, guest interface, MAC –
+  monospace, click to copy), host, cluster, **home subnet** (rule R1 of the vault note
+  `Netzwerk-Grundregeln`: lowest-numbered subnet whose role has a card, or `home` when set),
+  network cards (schema 3, also cards without an IP, with the matching address), switch port VLANs
+  (PVID, untagged, tagged), web interface, rack and connections; apps with their hostnames, entry
   badge (Internet / Intern / Internet + intern, Cloudflare), target, Traefik instance, ports and
   `runs-on` linked to the machine's note; clusters, subnets, sites and racks.
 - **Backups:** one card per block, coloured by `system`: what, location (`source`, or `on` for
@@ -90,8 +93,8 @@ backups: true           # false: tasks only
 
 ### `homelab-network`
 
-Machines and devices (name, type, host, IP, subnet, MAC, web interface), apps one row per
-hostname (hostname, entry, target, Traefik, runs on) and subnets. All columns are sortable; IP
+Machines and devices (name, type, host, IP, subnet, MAC, home subnet, web interface), apps one row per
+hostname (hostname, entry, target, Traefik, runs on) and subnets (with their role). All columns are sortable; IP
 addresses sort numerically.
 
 ````markdown

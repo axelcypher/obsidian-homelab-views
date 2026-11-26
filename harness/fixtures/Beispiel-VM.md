@@ -1,6 +1,6 @@
 ---
 network-flow:
-  schema: 1
+  schema: 3
   kind: machine
   name: beispiel-vm
   type: vm
@@ -9,9 +9,15 @@ network-flow:
     - ip: 10.20.0.99
       subnet: lan
       mac: bc:24:11:dc:99:08
+      iface: enp6s18
     - ip: 10.50.0.99
       subnet: backup
       mac: bc:24:11:dc:99:05
+      iface: enp6s20
+  interfaces:
+    - {name: net0, mac: "bc:24:11:dc:99:08", subnet: lan, vlan: 8}
+    - {name: net2, mac: "bc:24:11:dc:99:05", subnet: backup, vlan: 5}
+    - {name: net3, mac: "bc:24:11:dc:99:09", subnet: beispiel-wg, vlan: 9}
 backup:
   - schema: 1
     id: beispiel-vm-pbs
