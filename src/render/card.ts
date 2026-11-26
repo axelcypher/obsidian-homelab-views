@@ -1,0 +1,403 @@
+/** Card view of one note: its network-flow resources and its backup blocks. */
+import { BackupEntry, HomelabIndex, NetworkEntry, NoteRef, backupTitle, errorCount, findResourceNote } from "../model/index";
+import { addressSortKey, compareKeys } from "../model/ip";
+import type { NetworkResource } from "../model/network";
+import { formatDuration, labelRun, nextRun } from "../schedule/schedule";
+import { breakable, el, txt } from "./dom";
+import type { RenderEnv } from "./env";
+import {
+	copyable,
+	externalLink,
+	graceText,
+	graceUntil,
+	icon,
+	issuesView,
+	jobBadge,
+	locationView,
+	nextRunView,
+	retentionChips,
+	scheduleText,
+	systemBadge,
+	systemClass,
+	titleIsJob,
+	webUrl,
+} from "./common";
+import { CONNECTION_LABEL, ENTRY_LABEL, KIND_ICON, KIND_LABEL, TYPE_LABEL, plural } from "./labels";
+
+export interface CardData {
+	note: NoteRef;
+	backups: BackupEntry[];
+	network: NetworkEntry[];
+}
+
+export interface CardOptions {
+	network?: boolean;
+	backup?: boolean;
+}
+
+export function renderNoteCard(
+	parent: HTMLElement,
+	data: CardData,
+	index: HomelabIndex,
+	env: RenderEnv,
+	opts: CardOptions = {},
+): HTMLElement {
+	const root = el(parent, "div", "hv-root hv-note");
+	const showNet = opts.network !== false && data.network.length > 0;
+	const showBackup = opts.backup !== false && data.backups.length > 0;
+
+	if (showNet) {
+		const section = el(root, "div", "hv-section hv-section-net");
+		const subnets = data.network.filter((e) => e.res.kind === "subnet");
+		for (const e of data.network) {
+			if (e.res.kind === "subnet") continue;
+			networkCard(section, e, index, env);
+		}
+		if (subnets.length) subnetCard(section, subnets, env);
+	}
+
+	if (showBackup) {
+		const section = el(root, "div", "hv-section hv-section-backup");
+		backupSectionHead(section, data.backups, env);
+		const grid = el(section, "div", "hv-bk-grid");
+		for (const e of data.backups) backupCard(grid, e, data.note, env);
+	}
+
+	if (!showNet && !showBackup) el(root, "div", { cls: "hv-empty", text: "Keine Homelab-Daten in dieser Notiz." });
+	return root;
+}
+
+// ---------------------------------------------------------------------------
+// Network
+
+function cardHead(card: HTMLElement, res: NetworkResource, env: RenderEnv): HTMLElement {
+	const head = el(card, "div", "hv-card-head");
+	icon(head, env, KIND_ICON[res.kind ?? ""] ?? "server", "hv-icon hv-card-icon");
+	const main = el(head, "div", "hv-card-head-main");
+	const titleRow = el(main, "div", "hv-card-title-row");
+	el(titleRow, "span", { cls: "hv-card-title", text: res.name ?? "ohne Namen" });
+	const kind = KIND_LABEL[res.kind ?? ""] ?? res.kind ?? "unbekannt";
+	const type = res.type ? TYPE_LABEL[res.type] ?? res.type : undefined;
+	el(titleRow, "span", { cls: "hv-kind", text: type ? `${kind} · ${type}` : kind });
+	return main;
+}
+
+function noteLinkOrText(parent: HTMLElement, name: string, index: HomelabIndex, env: RenderEnv, kinds: NetworkResource["kind"][]) {
+	const note = findResourceNote(index, name, kinds) ?? env.resolveName?.(name);
+	if (note) env.link(parent, note, name, "hv-ref");
+	else el(parent, "span", { cls: "hv-ref is-unresolved", text: name, title: "Keine Notiz gefunden" });
+}
+
+function field(dl: HTMLElement, label: string): HTMLElement {
+	const row = el(dl, "div", "hv-field");
+	el(row, "div", { cls: "hv-field-k", text: label });
+	return el(row, "div", "hv-field-v");
+}
+
+function networkCard(parent: HTMLElement, e: NetworkEntry, index: HomelabIndex, env: RenderEnv): void {
+	const r = e.res;
+	const card = el(parent, "div", `hv-card hv-net hv-net-${r.kind ?? "unknown"}`);
+	const main = cardHead(card, r, env);
+
+	// Subtitle: where it lives
+	const sub = el(main, "div", "hv-card-sub");
+	const bits: (() => void)[] = [];
+	if (r.kind === "app" && r.runsOn?.length) {
+		bits.push(() => {
+			el(sub, "span", { cls: "hv-sub-k", text: r.runsOnCluster ? "läuft im Cluster " : "läuft auf " });
+			r.runsOn?.forEach((m, i) => {
+				if (i > 0) txt(sub, ", ");
+				noteLinkOrText(sub, m, index, env, r.runsOnCluster ? ["cluster"] : ["machine", "device", "cluster"]);
+			});
+		});
+	}
+	if (r.host) {
+		const host = r.host;
+		bits.push(() => {
+			el(sub, "span", { cls: "hv-sub-k", text: "Host " });
+			noteLinkOrText(sub, host, index, env, ["machine", "device"]);
+		});
+	}
+	if (r.cluster) {
+		const cluster = r.cluster;
+		bits.push(() => {
+			el(sub, "span", { cls: "hv-sub-k", text: "Cluster " });
+			noteLinkOrText(sub, cluster, index, env, ["cluster"]);
+		});
+	}
+	if (r.kind === "site" && r.subnet) bits.push(() => txt(sub, `Netz ${r.subnet}`));
+	if (r.kind === "rack" && r.site) bits.push(() => txt(sub, `Standort ${r.site}`));
+	bits.forEach((b, i) => {
+		if (i > 0) el(sub, "span", { cls: "hv-sep", text: " · " });
+		b();
+	});
+	if (!bits.length) sub.remove();
+
+	const body = el(card, "div", "hv-card-body");
+
+	if (r.addresses?.length) {
+		el(body, "div", { cls: "hv-label", text: "Adressen" });
+		const list = el(body, "div", "hv-addr-list");
+		const sorted = [...r.addresses].sort((a, b) => compareKeys(addressSortKey(a.ip), addressSortKey(b.ip)));
+		for (const a of sorted) {
+			const row = el(list, "div", "hv-addr");
+			copyable(row, a.ip, env, "hv-addr-ip");
+			el(row, "span", { cls: "hv-addr-subnet", text: a.subnet ?? "" });
+			if (a.mac) copyable(row, a.mac.toLowerCase(), env, "hv-addr-mac");
+			else el(row, "span", { cls: "hv-addr-mac hv-faint", text: "–" });
+		}
+	}
+
+	if (r.kind === "app") appBody(body, r, env);
+
+	if (r.kind === "cluster") {
+		if (r.machines?.length) {
+			el(body, "div", { cls: "hv-label", text: plural(r.machines.length, "Maschine", "Maschinen") });
+			const wrap = el(body, "div", "hv-ref-list");
+			for (const m of r.machines) noteLinkOrText(wrap, m, index, env, ["machine"]);
+		}
+		if (r.lbIps?.length) {
+			el(body, "div", { cls: "hv-label", text: "LB-IPs" });
+			const list = el(body, "div", "hv-addr-list is-two");
+			for (const lb of [...r.lbIps].sort((a, b) => compareKeys(addressSortKey(a.ip), addressSortKey(b.ip)))) {
+				const row = el(list, "div", "hv-addr");
+				copyable(row, lb.ip, env, "hv-addr-ip");
+				el(row, "span", { cls: "hv-addr-subnet", text: lb.services?.join(", ") ?? "" });
+			}
+		}
+	}
+
+	const dl = el(body, "div", "hv-fields");
+	if (r.macs?.length) {
+		const v = field(dl, r.macs.length === 1 ? "MAC" : "MACs");
+		r.macs.forEach((m, i) => {
+			if (i > 0) txt(v, " ");
+			copyable(v, m.toLowerCase(), env);
+		});
+	}
+	if (r.webInterface) {
+		const v = field(dl, "Weboberfläche");
+		copyable(v, r.webInterface, env);
+		const url = webUrl(r.webInterface);
+		if (url) {
+			txt(v, " ");
+			externalLink(v, url, "öffnen", env, "hv-open");
+		}
+	}
+	if (r.rack) {
+		const v = field(dl, "Rack");
+		const parts = [r.rack.name];
+		if (r.rack.position !== undefined) parts.push(`HE ${r.rack.position}`);
+		if (r.rack.shelf !== undefined) parts.push(`Fachboden HE ${r.rack.shelf}`);
+		if (r.rack.units !== undefined) parts.push(`${r.rack.units} HE hoch`);
+		if (r.rack.side) parts.push(r.rack.side === "back" ? "Rückseite" : "Vorderseite");
+		txt(v, parts.join(" · "));
+	}
+	if (r.kind === "rack") {
+		if (r.units !== undefined) txt(field(dl, "Höhe"), `${r.units} HE`);
+		if (r.shelves?.length)
+			txt(field(dl, "Fachböden"), r.shelves.map((s) => `HE ${s.position}${s.units > 1 ? `–${s.position + s.units - 1}` : ""}`).join(", "));
+	}
+	if (r.connections?.length) {
+		const v = field(dl, "Verbindungen");
+		const list = el(v, "div", "hv-conn-list");
+		for (const c of r.connections) {
+			const row = el(list, "div", "hv-conn");
+			el(row, "span", { cls: "hv-mono", text: c.port ?? "?" });
+			el(row, "span", { cls: "hv-conn-arrow", text: "→" });
+			el(row, "span", { cls: "hv-mono", text: c.to ?? "?" });
+			if (c.kind) el(row, "span", { cls: "hv-faint", text: CONNECTION_LABEL[c.kind] ?? c.kind });
+		}
+	}
+	if (!dl.childElementCount) dl.remove();
+	if (!body.childElementCount && !e.issues.length) body.remove();
+
+	issuesView(card, e.issues, e.field, env);
+	if (errorCount(e.issues)) card.classList.add("has-errors");
+}
+
+export function entryBadge(
+	parent: HTMLElement,
+	entry: string | undefined,
+	cloudflare: boolean | undefined,
+	env: RenderEnv,
+	compact = false,
+): void {
+	if (entry) {
+		const known = entry in ENTRY_LABEL;
+		const b = el(parent, "span", {
+			cls: `hv-badge hv-entry hv-entry-${known ? entry : "unknown"}`,
+			title: known ? `Eingang: ${ENTRY_LABEL[entry]}` : `Eingang ${entry} ist laut Schema nicht erlaubt`,
+		});
+		icon(b, env, entry === "intern" ? "lock" : "globe", "hv-icon hv-icon-xs");
+		el(b, "span", { text: ENTRY_LABEL[entry] ?? entry });
+	}
+	if (cloudflare) {
+		const c = el(parent, "span", {
+			cls: `hv-badge hv-cf${compact ? " is-compact" : ""}`,
+			title: "über den Cloudflare-Proxy",
+			attr: { "aria-label": "Cloudflare-Proxy" },
+		});
+		icon(c, env, "cloud", "hv-icon hv-icon-xs");
+		if (!compact) el(c, "span", { text: "Cloudflare" });
+	}
+}
+
+function appBody(body: HTMLElement, r: NetworkResource, env: RenderEnv): void {
+	if (r.hostnames?.length) {
+		el(body, "div", { cls: "hv-label", text: r.hostnames.length === 1 ? "Hostname" : "Hostnamen" });
+		const list = el(body, "div", "hv-host-list");
+		for (const h of r.hostnames) {
+			const row = el(list, "div", "hv-host");
+			const l1 = el(row, "div", "hv-host-line");
+			const name = el(l1, "a", {
+				cls: "hv-host-name hv-mono",
+				attr: { href: `https://${h.name}${h.path ?? ""}`, target: "_blank", rel: "noopener noreferrer" },
+			});
+			breakable(name, h.name, /(?<=[.])/);
+			if (h.path) el(name, "span", { cls: "hv-host-path", text: h.path });
+			const badges = el(l1, "span", "hv-host-badges");
+			entryBadge(badges, h.entry, h.cloudflare, env);
+			const l2 = el(row, "div", "hv-host-meta");
+			el(l2, "span", { cls: "hv-host-arrow", text: "→" });
+			if (h.target) copyable(l2, h.target, env, "hv-host-target");
+			else el(l2, "span", { cls: "hv-faint", text: "kein Ziel" });
+			if (h.traefik) {
+				el(l2, "span", { cls: "hv-sep", text: " · " });
+				el(l2, "span", { cls: "hv-sub-k", text: "Traefik " });
+				el(l2, "span", { cls: "hv-traefik", text: h.traefik === "cluster" ? "Cluster" : h.traefik });
+			}
+		}
+	}
+	if (r.ports?.length) {
+		el(body, "div", { cls: "hv-label", text: r.ports.length === 1 ? "Port" : "Ports" });
+		const list = el(body, "div", "hv-port-list");
+		for (const p of r.ports) {
+			const row = el(list, "div", "hv-port");
+			el(row, "span", { cls: "hv-port-num hv-mono", text: `${p.port}/${p.protocol ?? "?"}` });
+			if (p.purpose) el(row, "span", { cls: "hv-port-purpose", text: p.purpose });
+		}
+	}
+}
+
+function subnetCard(parent: HTMLElement, subnets: NetworkEntry[], env: RenderEnv): void {
+	const card = el(parent, "div", "hv-card hv-net hv-net-subnets");
+	const head = el(card, "div", "hv-card-head");
+	icon(head, env, "network", "hv-icon hv-card-icon");
+	const main = el(head, "div", "hv-card-head-main");
+	const row = el(main, "div", "hv-card-title-row");
+	el(row, "span", { cls: "hv-card-title", text: "Subnetze" });
+	el(row, "span", { cls: "hv-kind", text: String(subnets.length) });
+	const wrap = el(card, "div", "hv-table-wrap is-flush");
+	const table = el(wrap, "table", "hv-table is-compact");
+	const tr = el(el(table, "thead"), "tr");
+	for (const h of ["Name", "Netz", "VLAN", "Medium"]) el(tr, "th", { text: h });
+	const tbody = el(table, "tbody");
+	const sorted = [...subnets].sort((a, b) =>
+		compareKeys(addressSortKey(a.res.network?.split("/")[0]), addressSortKey(b.res.network?.split("/")[0])),
+	);
+	for (const s of sorted) {
+		const r = el(tbody, "tr");
+		el(r, "td", { cls: "hv-strong", text: s.res.name ?? "" });
+		const net = el(r, "td");
+		if (s.res.network) copyable(net, s.res.network, env);
+		el(r, "td", { cls: "hv-num", text: s.res.vlan === null ? "ohne Tag" : s.res.vlan === undefined ? "–" : String(s.res.vlan) });
+		el(r, "td", { text: s.res.medium ?? "–" });
+	}
+	const issues = subnets.flatMap((s) => s.issues);
+	issuesView(card, issues, "", env);
+}
+
+// ---------------------------------------------------------------------------
+// Backups
+
+function backupSectionHead(parent: HTMLElement, backups: BackupEntry[], env: RenderEnv): void {
+	const head = el(parent, "div", "hv-section-head");
+	icon(head, env, "database", "hv-icon");
+	el(head, "span", { cls: "hv-section-title", text: "Sicherungen" });
+	const jobs = backups.filter((b) => b.block.type === "job").length;
+	const copies = backups.length - jobs;
+	const counts = [copies ? plural(copies, "Sicherung", "Sicherungen") : "", jobs ? plural(jobs, "Job", "Jobs") : ""]
+		.filter(Boolean)
+		.join(" · ");
+	el(head, "span", { cls: "hv-section-meta", text: counts });
+
+	// Soonest next run of the note
+	let soonest: { at: number; entry: BackupEntry } | undefined;
+	for (const e of backups) {
+		const b = e.block;
+		if (!b.schedule || !b.tz) continue;
+		const n = nextRun(b.schedule, b.tz, env.now);
+		if (n.kind === "at" && (!soonest || n.at < soonest.at)) soonest = { at: n.at, entry: e };
+	}
+	if (soonest) {
+		const l = labelRun(soonest.at, soonest.entry.block.tz ?? env.displayTz, env.displayTz, env.now);
+		const next = el(head, "span", { cls: "hv-section-next" });
+		icon(next, env, "clock", "hv-icon hv-icon-xs");
+		el(next, "span", { text: `nächster Lauf ${l.day} ${l.time}` });
+		el(next, "span", { cls: "hv-faint", text: ` · ${soonest.entry.block.id ?? ""}` });
+	}
+}
+
+export function backupCard(parent: HTMLElement, e: BackupEntry, here: NoteRef, env: RenderEnv): HTMLElement {
+	const b = e.block;
+	const classes = ["hv-card", "hv-bk", systemClass(b.system)];
+	if (b.type === "job") classes.push("is-job");
+	if (b.copyOf) classes.push("is-copy");
+	if (errorCount(e.issues)) classes.push("has-errors");
+	const card = el(parent, "div", classes.join(" "));
+
+	const head = el(card, "div", "hv-bk-head");
+	systemBadge(head, b.system);
+	if (b.type === "job") jobBadge(head, b.job, !titleIsJob(b));
+	if (b.type === "job") card.setAttribute("aria-label", `Job ${b.id ?? ""}`);
+
+	el(card, "div", { cls: "hv-bk-title", text: backupTitle(b) });
+	el(card, "div", { cls: "hv-bk-id hv-mono", text: b.id ?? "ohne id", title: "id des Blocks" });
+
+	if (b.copyOf) {
+		const c = el(card, "div", "hv-copyof");
+		icon(c, env, "corner-down-right", "hv-icon hv-icon-xs");
+		el(c, "span", { text: "Kopie von " });
+		if (e.original && e.original.note.path !== here.path) env.link(c, e.original.note, b.copyOf, "hv-ref hv-mono");
+		else el(c, "span", { cls: `hv-ref hv-mono${e.original ? "" : " is-unresolved"}`, text: b.copyOf });
+		if (e.original?.block.what) el(c, "span", { cls: "hv-faint", text: ` · ${e.original.block.what}` });
+	}
+	if (e.copies.length) {
+		const c = el(card, "div", "hv-copyof is-has-copies");
+		icon(c, env, "copy", "hv-icon hv-icon-xs");
+		el(c, "span", { text: e.copies.length === 1 ? "weitere Kopie: " : "weitere Kopien: " });
+		e.copies.forEach((copy, i) => {
+			if (i > 0) txt(c, ", ");
+			if (copy.note.path !== here.path) env.link(c, copy.note, copy.block.id ?? copy.field, "hv-ref hv-mono");
+			else el(c, "span", { cls: "hv-ref hv-mono", text: copy.block.id ?? copy.field });
+		});
+	}
+
+	const dl = el(card, "div", "hv-fields");
+	locationView(field(dl, b.type === "job" ? "Wirkt auf" : "Ort"), b, env);
+	el(field(dl, "Zeitplan"), "span", { cls: b.schedule ? "hv-schedule" : "hv-faint", text: scheduleText(b) });
+	if (b.schedule?.kind !== "every") nextRunView(field(dl, "Nächster Lauf"), b, env);
+	else {
+		const v = field(dl, "Nächster Lauf");
+		el(v, "span", { cls: "hv-faint", text: "ohne feste Uhrzeit" });
+		if (b.graceMs !== undefined)
+			el(v, "div", {
+				cls: "hv-next-rel",
+				text: `überfällig nach ${formatDuration(b.schedule.everyMs + b.graceMs)} ohne Lauf`,
+			});
+	}
+	if (b.graceMs !== undefined) {
+		const v = field(dl, "Karenz");
+		txt(v, graceText(b));
+		const until = graceUntil(b, env);
+		if (until) el(v, "span", { cls: "hv-faint", text: ` · ${until}` });
+	}
+	if (b.retention) retentionChips(field(dl, "Aufbewahrung"), b.retention);
+	const fmt = [b.engine, b.format].filter(Boolean) as string[];
+	if (fmt.length) el(field(dl, "Format"), "span", { cls: "hv-mono", text: fmt.join(" · ") });
+	if (b.tz && b.tz !== env.displayTz) el(field(dl, "Zeitzone"), "span", { cls: "hv-mono", text: b.tz });
+
+	issuesView(card, e.issues, e.field, env);
+	return card;
+}

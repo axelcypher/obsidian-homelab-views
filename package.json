@@ -1,0 +1,27 @@
+{
+  "name": "axlc-homelab-views",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Renders the backup and network-flow frontmatter of the homelab docs as note cards, tables and a schedule timeline.",
+  "main": "main.js",
+  "scripts": {
+    "build": "tsc --noEmit && esbuild src/main.ts --bundle --format=cjs --platform=browser --target=es2020 --external:obsidian --external:electron --outfile=main.js",
+    "dev": "esbuild src/main.ts --bundle --format=cjs --platform=browser --target=es2020 --external:obsidian --external:electron --outfile=main.js --sourcemap=inline --watch",
+    "pretest": "esbuild src/core.ts --bundle --format=esm --platform=neutral --target=es2020 --outfile=build/test/core.mjs",
+    "test": "node --test \"test/*.test.mjs\"",
+    "harness": "node harness/build.mjs",
+    "shots": "node harness/build.mjs && node harness/shoot.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.8",
+    "js-yaml": "^4.1.0",
+    "obsidian": "^1.13.1",
+    "typescript": "^5.8.3"
+  },
+  "author": "axelcypher",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/axelcypher/obsidian-homelab-views.git"
+  }
+}

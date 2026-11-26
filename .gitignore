@@ -1,0 +1,9 @@
+node_modules/
+main.js
+*.map
+data.json
+.vscode/
+.DS_Store
+Thumbs.db
+build/
+harness/out/
