@@ -31,7 +31,7 @@ export function planned(entries: BackupEntry[]): Planned[] {
 	const out: Planned[] = [];
 	for (const e of entries) {
 		const b = e.block;
-		if (!b.schedule || !b.tz || b.schedule.kind !== "times") continue;
+		if (b.type === "ignore" || !b.schedule || !b.tz || b.schedule.kind !== "times") continue;
 		out.push({
 			entry: e,
 			key: e.key,

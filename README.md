@@ -29,6 +29,9 @@ top (or bottom) of the note, in reading view and Live Preview:
   jobs), schedule in plain German (“täglich 07:15 · 13:15 · 19:15 · 23:15”, “Mi 03:00”,
   “alle 6 h”), the **next run** computed from schedule and `tz` and shown in the display time zone,
   grace, retention chips, `copy-of` links in both directions and a job badge.
+- **Exceptions** (`type: ignore`): a dashed card “bewusst ausgenommen” with the location (`source`,
+  only `pbs` or `longhorn`) and the reason (`why`). They have no schedule, no retention and no next
+  run, and they never appear in the schedule.
 - Validation problems appear at the bottom of the affected card.
 
 The automatic card can be switched off; a note that contains its own `homelab-card` block gets no
@@ -42,6 +45,8 @@ Options are YAML inside the block; an empty block uses the defaults.
 
 All backup blocks as a table, one row per block: note, what, schedule, next run, grace, location,
 retention. Grouped by system with filter chips; copies are listed directly below their original.
+Exceptions (`type: ignore`) follow in a separate table “Bewusst ausgenommen” (note, what, location,
+reason).
 
 ````markdown
 ```homelab-backups

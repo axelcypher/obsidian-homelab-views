@@ -317,3 +317,43 @@ describe("backup schema 1: wrong types and values", () => {
 		assert.match(find(issuesOf(MINIMAL + "copy-of: test-block\n"), "backup.copy-of").message, /eigenen Block/);
 	});
 });
+
+describe("backup schema 1: exceptions (type: ignore)", () => {
+	const IGNORE = `
+schema: 1
+id: vm-opnsense-01-pbs
+type: ignore
+system: pbs
+what: alte OPNsense
+why: stillgelegt, Gruppe bleibt bis zum Aufräumen im PBS
+source: {pbs: vm/100}
+`;
+	test("the example of the schema note is valid and keeps why and source", () => {
+		const [p] = parseBackups(y(IGNORE));
+		assert.deepEqual(p.issues, []);
+		assert.equal(p.block.type, "ignore");
+		assert.equal(p.block.why, "stillgelegt, Gruppe bleibt bis zum Aufräumen im PBS");
+		assert.equal(p.block.source.kind, "pbs");
+		assert.equal(p.block.source.group, "vm/100");
+		assert.equal(p.block.schedule, undefined);
+	});
+	test("a longhorn exception is valid", () => {
+		assert.deepEqual(issuesOf(`schema: 1\nid: x-lh\ntype: ignore\nsystem: longhorn\nwhy: Cache\nsource: {longhorn: ns/pvc}`), []);
+	});
+	test("why and source are required", () => {
+		const f = fields(issuesOf(`schema: 1\nid: x\ntype: ignore\nsystem: pbs`));
+		assert.ok(f.includes("backup.why"), f.join());
+		assert.ok(f.includes("backup.source"), f.join());
+	});
+	test("schedule and retention are not allowed, only pbs or longhorn as source", () => {
+		const issues = issuesOf(`${IGNORE}schedule: {times: ["02:00"]}\nretention: {keep-last: 2}`);
+		assert.ok(find(issues, "backup.schedule"));
+		assert.ok(find(issues, "backup.retention"));
+		const restic = issuesOf(`schema: 1\nid: x\ntype: ignore\nsystem: restic\nwhy: x\nsource: {restic: "10.50.0.10:/backup/x"}`);
+		assert.ok(find(restic, "backup.source"));
+	});
+	test("an unknown type still names ignore as allowed", () => {
+		const t = find(issuesOf(`${MINIMAL}type: skip`), "backup.type");
+		assert.match(t.message, /ignore/);
+	});
+});

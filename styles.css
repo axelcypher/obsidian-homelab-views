@@ -809,3 +809,11 @@ input.hv-invalid { border-color: var(--text-error) !important; }
 	.hv-problems-list { grid-template-columns: max-content minmax(0, 1fr); }
 	.hv-root .hv-problem-block { display: none; }
 }
+
+/* Exceptions (type: ignore): left out on purpose */
+.hv-bk.is-ignored { background: transparent; border-style: dashed; }
+.hv-bk.is-ignored::before { opacity: 0.3; }
+.hv-root .hv-badge-ignore { background: transparent; border: 1px dashed var(--hv-border-strong); color: var(--text-muted); padding: 0 7px; }
+.hv-root .hv-ignored { margin-top: var(--size-4-4, 16px); }
+.hv-root .hv-ignored-head { display: flex; align-items: baseline; gap: 4px; margin-bottom: var(--size-4-2, 8px); }
+.hv-root .hv-ignored-title { font-weight: var(--font-semibold, 600); }

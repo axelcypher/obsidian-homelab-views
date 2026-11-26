@@ -62,8 +62,15 @@ export function renderBackups(
 	let list = entries;
 	if (opts.system) list = list.filter((e) => e.block.system && opts.system?.includes(e.block.system));
 	if (!opts.jobs) list = list.filter((e) => e.block.type !== "job");
-	if (!list.length) {
+	// exceptions (type: ignore) have no schedule: own section below the table
+	const ignored = list.filter((e) => e.block.type === "ignore");
+	list = list.filter((e) => e.block.type !== "ignore");
+	if (!list.length && !ignored.length) {
 		emptyState(root, "Keine Backup-Blöcke gefunden.");
+		return;
+	}
+	if (!list.length) {
+		ignoredSection(root, ignored, env);
 		return;
 	}
 
@@ -165,6 +172,31 @@ export function renderBackups(
 		);
 	};
 	draw();
+	ignoredSection(root, ignored, env);
+}
+
+/** "Bewusst ausgenommen": sources found live that are not backed up on purpose. */
+function ignoredSection(parent: HTMLElement, ignored: BackupEntry[], env: RenderEnv): void {
+	if (!ignored.length) return;
+	const sec = el(parent, "div", "hv-ignored");
+	const head = el(sec, "div", "hv-ignored-head");
+	el(head, "span", { cls: "hv-ignored-title", text: "Bewusst ausgenommen" });
+	el(head, "span", { cls: "hv-faint", text: ` · ${plural(ignored.length, "Ausnahme", "Ausnahmen")}` });
+	const wrap = scrollWrap(sec);
+	const table = el(wrap, "table", "hv-table hv-ignored-table");
+	const headRow = el(el(table, "thead"), "tr");
+	for (const h of ["Notiz", "Was", "Ort", "Grund"]) el(headRow, "th", { text: h });
+	const tbody = el(table, "tbody");
+	for (const e of ignored) {
+		const tr = el(tbody, "tr", systemClass(e.block.system));
+		env.link(el(tr, "td", "hv-col-notiz"), e.note, e.note.name, "hv-note-link");
+		const what = el(tr, "td", "hv-col-was");
+		el(what, "div", { cls: "hv-what", text: e.block.what ?? e.block.id ?? "" });
+		el(what, "div", { cls: "hv-what-id hv-mono", text: e.block.id ?? "ohne id" });
+		locationView(el(tr, "td", "hv-col-ort"), e.block, env, true);
+		el(tr, "td", { text: e.block.why ?? "" });
+	}
+	problemsSection(sec, ignored.map((e) => ({ note: e.note, field: e.field, issues: e.issues, label: e.block.id })), env);
 }
 
 function whatCell(td: HTMLElement, e: BackupEntry, depth: number, env: RenderEnv): void {

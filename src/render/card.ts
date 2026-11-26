@@ -316,8 +316,13 @@ function backupSectionHead(parent: HTMLElement, backups: BackupEntry[], env: Ren
 	icon(head, env, "database", "hv-icon");
 	el(head, "span", { cls: "hv-section-title", text: "Sicherungen" });
 	const jobs = backups.filter((b) => b.block.type === "job").length;
-	const copies = backups.length - jobs;
-	const counts = [copies ? plural(copies, "Sicherung", "Sicherungen") : "", jobs ? plural(jobs, "Job", "Jobs") : ""]
+	const ignored = backups.filter((b) => b.block.type === "ignore").length;
+	const copies = backups.length - jobs - ignored;
+	const counts = [
+		copies ? plural(copies, "Sicherung", "Sicherungen") : "",
+		jobs ? plural(jobs, "Job", "Jobs") : "",
+		ignored ? plural(ignored, "Ausnahme", "Ausnahmen") : "",
+	]
 		.filter(Boolean)
 		.join(" · ");
 	el(head, "span", { cls: "hv-section-meta", text: counts });
@@ -341,6 +346,7 @@ function backupSectionHead(parent: HTMLElement, backups: BackupEntry[], env: Ren
 
 export function backupCard(parent: HTMLElement, e: BackupEntry, here: NoteRef, env: RenderEnv): HTMLElement {
 	const b = e.block;
+	if (b.type === "ignore") return ignoreCard(parent, e, env);
 	const classes = ["hv-card", "hv-bk", systemClass(b.system)];
 	if (b.type === "job") classes.push("is-job");
 	if (b.copyOf) classes.push("is-copy");
@@ -401,6 +407,24 @@ export function backupCard(parent: HTMLElement, e: BackupEntry, here: NoteRef, e
 	if (fmt.length) el(field(dl, "Format"), "span", { cls: "hv-mono", text: fmt.join(" · ") });
 	if (b.tz && b.tz !== env.displayTz) el(field(dl, "Zeitzone"), "span", { cls: "hv-mono", text: b.tz });
 
+	issuesView(card, e.issues, e.field, env);
+	return card;
+}
+
+/** `type: ignore`: found live, left out on purpose — no schedule, just the reason. */
+function ignoreCard(parent: HTMLElement, e: BackupEntry, env: RenderEnv): HTMLElement {
+	const b = e.block;
+	const classes = ["hv-card", "hv-bk", "is-ignored", systemClass(b.system)];
+	if (errorCount(e.issues)) classes.push("has-errors");
+	const card = el(parent, "div", classes.join(" "));
+	const head = el(card, "div", "hv-bk-head");
+	systemBadge(head, b.system);
+	el(head, "span", { cls: "hv-badge hv-badge-ignore", text: "bewusst ausgenommen" });
+	el(card, "div", { cls: "hv-bk-title", text: b.what ?? b.id ?? "Ausnahme" });
+	el(card, "div", { cls: "hv-bk-id hv-mono", text: b.id ?? "ohne id", title: "id des Blocks" });
+	const dl = el(card, "div", "hv-fields");
+	locationView(field(dl, "Ort"), b, env);
+	el(field(dl, "Grund"), "span", { text: b.why ?? "–" });
 	issuesView(card, e.issues, e.field, env);
 	return card;
 }

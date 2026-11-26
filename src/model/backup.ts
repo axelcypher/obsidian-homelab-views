@@ -49,9 +49,11 @@ export interface JobTarget {
 export interface BackupBlock {
 	schema?: number;
 	id?: string;
-	type: "backup" | "job";
+	type: "backup" | "job" | "ignore";
 	system?: BackupSystem;
 	what?: string;
+	/** type: ignore — why the source is left out on purpose */
+	why?: string;
 	schedule?: Schedule;
 	tz?: string;
 	grace?: string;
@@ -89,6 +91,9 @@ const COMMON_KEYS = [
 ] as const;
 const BACKUP_ONLY = ["copy-of", "source"] as const;
 const JOB_ONLY = ["job", "on"] as const;
+/** type: ignore — a source found live that is not backed up on purpose (no schedule, no retention) */
+const IGNORE_KEYS = ["schema", "id", "type", "system", "what", "why", "source"] as const;
+const IGNORE_SOURCES: readonly SourceKind[] = ["pbs", "longhorn"];
 
 export const ID_PATTERN = /^[a-z0-9-]+$/;
 const ID_MSG = "nur Kleinbuchstaben, Ziffern und „-“";
@@ -121,16 +126,17 @@ export function validateBackupBlock(raw: unknown, c: Checker): BackupBlock {
 	}
 
 	// type decides which keys are allowed
-	let type: "backup" | "job" = "backup";
+	let type: "backup" | "job" | "ignore" = "backup";
 	const rawType = raw.type;
 	let typeKnown = true;
 	if (rawType !== undefined) {
-		if (rawType === "backup" || rawType === "job") type = rawType;
+		if (rawType === "backup" || rawType === "job" || rawType === "ignore") type = rawType;
 		else {
 			typeKnown = false;
-			c.error("type", `${show(rawType)} ist nicht erlaubt; erlaubt: backup, job`);
+			c.error("type", `${show(rawType)} ist nicht erlaubt; erlaubt: backup, job, ignore`);
 		}
 	}
+	if (type === "ignore") return validateIgnoreBlock(raw, c);
 
 	const allowed: string[] = [...COMMON_KEYS];
 	const hints: Record<string, string> = {};
@@ -193,6 +199,32 @@ export function validateBackupBlock(raw: unknown, c: Checker): BackupBlock {
 		if (on) block.on = validateJobTarget(on, c.child("on"));
 	}
 
+	return block;
+}
+
+/** `type: ignore`: schema, id, system, why and a pbs/longhorn source; no schedule, no retention. */
+function validateIgnoreBlock(raw: Raw, c: Checker): BackupBlock {
+	const hint = "nicht bei type: ignore (Ausnahmen haben keinen Zeitplan und keine Aufbewahrung)";
+	const hints: Record<string, string> = {};
+	for (const k of [...COMMON_KEYS, ...BACKUP_ONLY, ...JOB_ONLY]) if (!(IGNORE_KEYS as readonly string[]).includes(k)) hints[k] = hint;
+	c.unknownKeys(raw, [...IGNORE_KEYS], hints);
+	const block: BackupBlock = { type: "ignore" };
+	if (raw.schema === undefined || raw.schema === null) c.missing("schema");
+	else if (raw.schema !== 1) {
+		if (typeof raw.schema === "number") c.error("schema", `Version ${raw.schema} ist unbekannt (bekannt: 1)`);
+		else c.wrongType("schema", "die Zahl 1", raw.schema);
+	} else block.schema = 1;
+	block.id = c.str(raw, "id", { required: true, pattern: ID_PATTERN, patternMsg: ID_MSG });
+	const system = c.str(raw, "system", { required: true, oneOf: BACKUP_SYSTEMS });
+	if (system && (BACKUP_SYSTEMS as readonly string[]).includes(system)) block.system = system as BackupSystem;
+	block.what = c.str(raw, "what");
+	block.why = c.str(raw, "why", { required: true });
+	const source = c.obj(raw, "source", { required: true });
+	if (source) {
+		const src = validateSource(source, c.child("source"));
+		if (src && !IGNORE_SOURCES.includes(src.kind)) c.error("source", `bei type: ignore nur pbs oder longhorn, nicht ${src.kind}`);
+		else if (src) block.source = src;
+	}
 	return block;
 }
 
