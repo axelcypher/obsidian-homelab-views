@@ -175,6 +175,7 @@ function networkCard(parent: HTMLElement, e: NetworkEntry, index: HomelabIndex, 
 		}
 	}
 
+	if (r.front?.length || r.back?.length) frontPanel(body, r);
 	if (r.interfaces?.length) interfacesTable(body, r, env);
 	if (r.switchPorts?.length) switchPortsTable(body, r);
 
@@ -569,4 +570,56 @@ function switchPortsTable(body: HTMLElement, r: NetworkResource): void {
 		el(tr, "td", { cls: "hv-mono", text: fmt(p.untagged) });
 		el(tr, "td", { cls: "hv-mono", text: fmt(p.tagged) });
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Schema 4: front and back view
+
+const PORT_TYPE_LABEL: Record<string, string> = {
+	rj45: "RJ45",
+	sfp: "SFP",
+	"sfp+": "SFP+",
+	combo: "Combo (RJ45 + SFP)",
+	usb: "USB",
+	inlet: "Stromeingang",
+	outlet: "Steckdose",
+};
+
+/** Connectors as on the device: rows top to bottom; linked ports highlighted, details on hover. */
+function frontPanel(body: HTMLElement, r: NetworkResource): void {
+	const conn = new Map((r.connections ?? []).filter((c) => c.port).map((c) => [c.port as string, c]));
+	const vlans = new Map((r.switchPorts ?? []).map((p) => [p.port, p]));
+	const ifaces = new Map((r.interfaces ?? []).map((i) => [i.name, i]));
+	const side = (label: string, rows: (string | null)[][] | undefined) => {
+		if (!rows?.length) return;
+		el(body, "div", { cls: "hv-label", text: label });
+		const panel = el(body, "div", { cls: "hv-panel", attr: { role: "img", "aria-label": `${label} von ${r.name ?? ""}` } });
+		for (const row of rows) {
+			const line = el(panel, "div", "hv-panel-row");
+			for (const name of row) {
+				if (name === null) {
+					el(line, "span", { cls: "hv-panel-gap", attr: { "aria-hidden": "true" } });
+					continue;
+				}
+				const type = r.portTypes?.[name] ?? "rj45";
+				const c = conn.get(name);
+				const v = vlans.get(name);
+				const i = ifaces.get(name);
+				const tip = [`${name} · ${PORT_TYPE_LABEL[type] ?? type}`];
+				if (c) tip.push(`→ ${c.to ?? "?"}${c.kind ? ` (${CONNECTION_LABEL[c.kind] ?? c.kind})` : ""}`);
+				if (v) {
+					const fmt = (ids?: number[]) => (ids === undefined ? "–" : ids.length ? ids.join(", ") : "keine");
+					tip.push(`PVID ${v.pvid ?? "–"} · ungetaggt ${fmt(v.untagged)} · getaggt ${fmt(v.tagged)}`);
+				}
+				if (i) tip.push([i.subnet, i.vlan === null ? "ohne Tag" : i.vlan !== undefined ? `VLAN ${i.vlan}` : "", i.mac].filter(Boolean).join(" · "));
+				const cls = ["hv-port-cell", `is-${type.replace("+", "-plus")}`];
+				if (c) cls.push("is-linked");
+				const cell = el(line, "span", { cls: cls.join(" "), title: tip.join("\n") });
+				const label = type === "inlet" || type === "outlet" ? "AC" : type === "usb" ? "" : name.replace(/^(gi|ge|eth|port)/i, "") || name;
+				el(cell, "span", { cls: "hv-port-label", text: label });
+			}
+		}
+	};
+	side("Front", r.front);
+	side("Rückseite", r.back);
 }

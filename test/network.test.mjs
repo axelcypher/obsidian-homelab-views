@@ -143,7 +143,7 @@ describe("network-flow: errors", () => {
 		assert.match(find(issuesOf("{schema: 1, kind: device, name: x, type: nas, rack: {name: W, position: 3}}"), "network-flow.rack").message, /erst ab schema: 2/);
 		assert.deepEqual(issuesOf("{schema: 1, kind: device, name: x, type: nas, rack: Wandschrank}"), []);
 		assert.match(find(issuesOf("{schema: 1, kind: rack, name: W, units: 12}"), "network-flow.kind").message, /erst ab schema: 2/);
-		assert.match(find(issuesOf("{schema: 4, kind: site, name: S}"), "network-flow.schema").message, /Version 4 ist unbekannt/);
+		assert.match(find(issuesOf("{schema: 5, kind: site, name: S}"), "network-flow.schema").message, /Version 5 ist unbekannt/);
 	});
 
 	test("rack placement rules", () => {
@@ -238,5 +238,39 @@ interfaces:
 	test("schema 3 keeps the schema 2 features (path, rack objects)", () => {
 		assert.deepEqual(issuesOf("{schema: 3, kind: machine, name: x, type: host, rack: {name: W, position: 3}}"), []);
 		assert.deepEqual(issuesOf("{schema: 3, kind: app, name: x, runs-on: [a], hostnames: [{name: a.b, entry: intern, target: 'a.b:80', path: /x}]}"), []);
+	});
+});
+
+describe("network-flow schema 4 (front view)", () => {
+	const SW = `
+schema: 4
+kind: device
+name: sg300
+type: switch
+front:
+  - [gi1, gi2, gi3, gi4, gi5, gi6, gi7, gi8, null, gi17, null, gi19]
+  - [gi9, gi10, gi11, gi12, gi13, gi14, gi15, gi16, null, gi18, null, gi20]
+port-types: {gi19: combo, gi20: combo}
+`;
+	test("front with gaps and combo ports is valid; numbers are read as text", () => {
+		const [p] = parseNetwork(y(SW));
+		assert.deepEqual(p.issues, []);
+		assert.equal(p.res.front[0][8], null);
+		assert.equal(p.res.portTypes.gi19, "combo");
+		const [n] = parseNetwork(y("{schema: 4, kind: device, name: hpe, type: switch, front: [[1, 2, 3, 4, null, 5, 6, 7, 8]], back: [[inlet]], port-types: {inlet: inlet}}"));
+		assert.deepEqual(n.issues, []);
+		assert.equal(n.res.front[0][0], "1");
+	});
+	test("a connector twice, empty rows, unknown types and port-types outside the view are errors", () => {
+		assert.match(find(issuesOf(SW.replace("gi20]", "gi1]")), "network-flow.front[1][11]").message, /steht schon in front\[0\]\[0\]/);
+		assert.ok(find(issuesOf("{schema: 4, kind: device, name: s, type: switch, front: [[]]}"), "network-flow.front[0]"));
+		assert.ok(find(issuesOf("{schema: 4, kind: device, name: s, type: switch, front: [[null, null]]}"), "network-flow.front[0]"));
+		assert.ok(find(issuesOf("{schema: 4, kind: device, name: s, type: switch, front: []}"), "network-flow.front"));
+		assert.match(find(issuesOf(SW.replace("gi20: combo", "gi20: lc")), "network-flow.port-types.gi20").message, /nicht erlaubt/);
+		assert.match(find(issuesOf(SW.replace("gi20: combo", "gi21: combo")), "network-flow.port-types.gi21").message, /weder in front noch in back/);
+	});
+	test("front in schema 3 points to schema 4; schema 4 keeps the schema 3 fields", () => {
+		assert.match(find(issuesOf(SW.replace("schema: 4", "schema: 3")), "network-flow.front").message, /erst ab schema: 4/);
+		assert.deepEqual(issuesOf(`${SW}ports:\n  - {port: Po1, pvid: 1, vlans: {untagged: [1], tagged: [2]}}\n`), []);
 	});
 });

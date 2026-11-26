@@ -3,6 +3,7 @@
  * (vault: homelab-docs/projects/network-flow/Frontmatter für den Doku-Zustand.md).
  * Schema 3 (network-flow #113): `role` at subnets, `home` and `interfaces` at machines
  * and devices, `addresses[].iface`, `ports` (VLANs of switch ports) at devices.
+ * Schema 4 (network-flow #117): `front`, `back` and `port-types` (front view) at machines and devices.
  */
 import { Checker, Issue, Raw, blocksOf, isObject, show } from "./check";
 import { MAC, isCidr, isHostname, isIPv4, isIPv6, parseHostPort } from "./ip";
@@ -17,6 +18,7 @@ export const CONNECTION_KINDS = ["copper", "fibre", "usb", "power", "wifi", "vir
 export const MEDIA = ["LAN", "WLAN", "WireGuard"] as const;
 export const PROTOCOLS = ["tcp", "udp"] as const;
 export const SUBNET_ROLES = ["management", "admin", "server", "iot", "clients", "guest", "development", "gameserver", "storage", "vpn"] as const;
+export const PORT_TYPES = ["rj45", "sfp", "sfp+", "combo", "usb", "inlet", "outlet"] as const;
 /** Roles whose subnets get no card of their own (Netzwerk-Grundregeln R2). */
 export const NO_CARD_ROLES: readonly string[] = ["management", "storage"];
 
@@ -103,6 +105,11 @@ export interface NetworkResource {
 	interfaces?: Interface[];
 	home?: string;
 	switchPorts?: SwitchPort[];
+	/** schema 4: rows top to bottom, each left to right; null = gap */
+	front?: (string | null)[][];
+	back?: (string | null)[][];
+	/** schema 4: type per connector that is not RJ45 */
+	portTypes?: Record<string, string>;
 	macs?: string[];
 	webInterface?: string;
 	rack?: RackPlace;
@@ -133,8 +140,8 @@ export interface ParsedResource {
 
 const KIND_KEYS: Record<NetworkKind, readonly string[]> = {
 	app: ["runs-on", "hostnames", "ports"],
-	machine: ["type", "host", "cluster", "addresses", "interfaces", "home", "web-interface", "rack", "connections"],
-	device: ["type", "addresses", "interfaces", "home", "macs", "ports", "rack", "web-interface", "connections"],
+	machine: ["type", "host", "cluster", "addresses", "interfaces", "home", "web-interface", "rack", "connections", "front", "back", "port-types"],
+	device: ["type", "addresses", "interfaces", "home", "macs", "ports", "rack", "web-interface", "connections", "front", "back", "port-types"],
 	cluster: ["machines", "lb-ips"],
 	subnet: ["network", "vlan", "medium", "role"],
 	site: ["subnet"],
@@ -146,6 +153,11 @@ const SCHEMA3_KEYS: Partial<Record<NetworkKind, readonly string[]>> = {
 	machine: ["interfaces", "home"],
 	device: ["interfaces", "home", "ports"],
 	subnet: ["role"],
+};
+/** Keys that only exist from schema 4 on, per kind. */
+const SCHEMA4_KEYS: Partial<Record<NetworkKind, readonly string[]>> = {
+	machine: ["front", "back", "port-types"],
+	device: ["front", "back", "port-types"],
 };
 const HOST_PORT_MSG = "erwartet adresse:port, z. B. 10.20.0.50:443 (IPv6 in eckigen Klammern)";
 
@@ -166,9 +178,9 @@ export function validateResource(raw: unknown, c: Checker): NetworkResource {
 
 	let schema = 0;
 	if (raw.schema === undefined || raw.schema === null) c.missing("schema");
-	else if (raw.schema === 1 || raw.schema === 2 || raw.schema === 3) schema = res.schema = raw.schema;
-	else if (typeof raw.schema === "number") c.error("schema", `Version ${raw.schema} ist unbekannt (bekannt: 1, 2, 3)`);
-	else c.wrongType("schema", "die Zahl 1, 2 oder 3", raw.schema);
+	else if (raw.schema === 1 || raw.schema === 2 || raw.schema === 3 || raw.schema === 4) schema = res.schema = raw.schema;
+	else if (typeof raw.schema === "number") c.error("schema", `Version ${raw.schema} ist unbekannt (bekannt: 1, 2, 3, 4)`);
+	else c.wrongType("schema", "die Zahl 1, 2, 3 oder 4", raw.schema);
 
 	const kind = c.str(raw, "kind", { required: true, oneOf: NETWORK_KINDS });
 	let known: NetworkKind | undefined;
@@ -187,8 +199,11 @@ export function validateResource(raw: unknown, c: Checker): NetworkResource {
 
 	const hints: Record<string, string> = {};
 	if (schema === 1 && known === "machine") hints.rack = "rack an einer Maschine gibt es erst ab schema: 2";
-	const only3 = schema !== 0 && schema < 3 ? SCHEMA3_KEYS[known] ?? [] : [];
-	for (const key of only3) hints[key] = `${key} gibt es erst ab schema: 3`;
+	const only3 = [
+		...(schema !== 0 && schema < 3 ? SCHEMA3_KEYS[known] ?? [] : []),
+		...(schema !== 0 && schema < 4 ? SCHEMA4_KEYS[known] ?? [] : []),
+	];
+	for (const key of only3) hints[key] = `${key} gibt es erst ab schema: ${(SCHEMA4_KEYS[known] ?? []).includes(key) ? 4 : 3}`;
 	for (const [k, keys] of Object.entries(KIND_KEYS)) {
 		if (k === known) continue;
 		for (const key of keys) if (!KIND_KEYS[known].includes(key)) hints[key] ??= `gehört nicht zu kind: ${known}`;
@@ -214,6 +229,7 @@ export function validateResource(raw: unknown, c: Checker): NetworkResource {
 			res.webInterface = hostPort(raw, "web-interface", c);
 			if (schema >= 2) res.rack = rackPlace(raw, c, schema);
 			res.connections = connections(raw, c);
+			if (schema >= 4) frontView(raw, c, res);
 			break;
 		case "device":
 			res.type = c.str(raw, "type", { required: true, oneOf: DEVICE_TYPES });
@@ -227,6 +243,7 @@ export function validateResource(raw: unknown, c: Checker): NetworkResource {
 			res.rack = rackPlace(raw, c, schema);
 			res.webInterface = hostPort(raw, "web-interface", c);
 			res.connections = connections(raw, c);
+			if (schema >= 4) frontView(raw, c, res);
 			break;
 		case "cluster":
 			res.machines = c.strList(raw, "machines", { required: true, nonEmpty: true });
@@ -452,6 +469,51 @@ function connections(raw: Raw, c: Checker): Connection[] | undefined {
 		out.push({ port, to, kind });
 	});
 	return out;
+}
+
+/** schema 4: `front`, `back` (rows of connector names, null = gap) and `port-types`. */
+function frontView(raw: Raw, c: Checker, res: NetworkResource): void {
+	const seen = new Map<string, string>();
+	const side = (key: "front" | "back"): (string | null)[][] | undefined => {
+		const rows = c.list(raw, key, { nonEmpty: true });
+		if (!rows) return undefined;
+		const out: (string | null)[][] = [];
+		rows.forEach((row, r) => {
+			const field = `${key}[${r}]`;
+			if (!Array.isArray(row)) return c.wrongType(field, "eine Liste (eine Reihe)", row);
+			if (!row.length) return c.error(field, "eine Reihe darf nicht leer sein");
+			const cells: (string | null)[] = [];
+			row.forEach((cell, k) => {
+				const f = `${field}[${k}]`;
+				if (cell === null) return void cells.push(null);
+				if (typeof cell !== "string" && typeof cell !== "number") return void c.wrongType(f, "ein Name oder null", cell);
+				const name = String(cell).trim();
+				if (!name) return void c.error(f, "darf nicht leer sein");
+				const before = seen.get(name);
+				if (before) c.error(f, `${show(name)} steht schon in ${before}`);
+				else seen.set(name, f);
+				cells.push(name);
+			});
+			if (cells.every((x) => x === null)) c.error(field, "eine Reihe nur aus Lücken");
+			out.push(cells);
+		});
+		return out;
+	};
+	res.front = side("front");
+	res.back = side("back");
+	const types = c.obj(raw, "port-types");
+	if (types) {
+		const tc = c.child("port-types");
+		res.portTypes = {};
+		for (const [name, type] of Object.entries(types)) {
+			if (!seen.has(name)) tc.error(name, `${show(name)} steht weder in front noch in back`);
+			if (typeof type !== "string" || !(PORT_TYPES as readonly string[]).includes(type)) {
+				tc.error(name, `${show(type)} ist nicht erlaubt; erlaubt: ${PORT_TYPES.join(", ")}`);
+				continue;
+			}
+			res.portTypes[name] = type;
+		}
+	}
 }
 
 function lbIps(raw: Raw, c: Checker): LbIp[] | undefined {

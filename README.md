@@ -8,7 +8,7 @@ schedule – without Dataview or Bases. It reads three frontmatter keys:
 
 - **`backup`** – backup blocks, schema 1 (vault note
   `homelab-docs/projects/backup-ui/Frontmatter für Backups.md`)
-- **`network-flow`** – documented network state, schema 1, 2 and 3 (vault note
+- **`network-flow`** – documented network state, schema 1 to 4 (vault note
   `homelab-docs/projects/network-flow/Frontmatter für den Doku-Zustand.md`)
 - **`tasks`** – scheduled work that is not a backup, schema 1, defined by this plugin (vault note
   `homelab-docs/projects/homelab-views/Frontmatter für geplante Aufgaben.md`)
@@ -27,7 +27,9 @@ top (or bottom) of the note, in reading view and Live Preview:
   monospace, click to copy), host, cluster, **home subnet** (rule R1 of the vault note
   `Netzwerk-Grundregeln`: lowest-numbered subnet whose role has a card, or `home` when set),
   network cards (schema 3, also cards without an IP, with the matching address), switch port VLANs
-  (PVID, untagged, tagged), web interface, rack and connections; apps with their hostnames, entry
+  (PVID, untagged, tagged), the **front and back view** (schema 4: rows of connectors with gaps,
+  SFP/combo/USB/power drawn differently, linked ports highlighted, VLANs and connection on hover),
+  web interface, rack and connections; apps with their hostnames, entry
   badge (Internet / Intern / Internet + intern, Cloudflare), target, Traefik instance, ports and
   `runs-on` linked to the machine's note; clusters, subnets, sites and racks.
 - **Backups:** one card per block, coloured by `system`: what, location (`source`, or `on` for

@@ -867,3 +867,44 @@ input.hv-invalid { border-color: var(--text-error) !important; }
 
 /* Tables inside a card body (network cards, switch ports): own frame, space to what follows */
 .hv-table-wrap.hv-card-table { margin: 4px 0 12px; }
+
+/* --------------------------------------------------------- front view (schema 4) */
+
+.hv-panel {
+	display: inline-flex;
+	flex-direction: column;
+	gap: 5px;
+	max-width: 100%;
+	overflow-x: auto;
+	padding: 10px 12px;
+	margin: 2px 0 10px;
+	border: 1px solid var(--hv-border);
+	border-radius: var(--hv-radius);
+	background: var(--hv-bg-soft);
+}
+.hv-panel-row { display: flex; gap: 4px; align-items: center; }
+.hv-panel-gap { flex: none; width: 12px; }
+.hv-port-cell {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 30px;
+	height: 24px;
+	border-radius: 3px;
+	border: 1px solid var(--hv-border-strong);
+	background: var(--hv-bg);
+	font-family: var(--font-monospace);
+	font-size: 10.5px;
+	color: var(--text-muted);
+	cursor: default;
+}
+.hv-port-cell.is-linked { border-color: var(--interactive-accent); color: var(--text-normal); box-shadow: inset 0 -3px 0 var(--interactive-accent); }
+.hv-port-cell.is-sfp,
+.hv-port-cell.is-sfp-plus { width: 36px; height: 18px; border-radius: 2px; background: rgba(var(--mono-rgb-100), 0.08); }
+.hv-port-cell.is-sfp-plus { border-width: 1.5px; }
+.hv-port-cell.is-combo { width: 44px; background: linear-gradient(90deg, var(--hv-bg) 0 58%, rgba(var(--mono-rgb-100), 0.1) 58%); }
+.hv-port-cell.is-usb { width: 22px; height: 12px; border-radius: 2px; font-size: 0; }
+.hv-port-cell.is-inlet,
+.hv-port-cell.is-outlet { width: 26px; height: 26px; border-radius: 50%; font-size: 9px; }
+.hv-port-label { pointer-events: none; }
