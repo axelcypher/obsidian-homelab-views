@@ -1,4 +1,4 @@
-/** `homelab-network`: machines and devices, apps by hostname, subnets – sortable, IPs numerically. */
+/** `homelab-network`: machines and devices, apps by hostname, subnets, Zigbee nodes – sortable, IPs numerically. */
 import { HomelabIndex, NetworkEntry, NoteRef, errorCount, findResourceNote, homeSubnet } from "../model/index";
 import { addressSortKey, compareKeys } from "../model/ip";
 import { NO_CARD_ROLES } from "../model/network";
@@ -7,7 +7,7 @@ import { el, txt } from "./dom";
 import type { RenderEnv, ViewState } from "./env";
 import { copyable, emptyState, externalLink, issueMarker, problemsSection, webUrl } from "./common";
 import { entryBadge } from "./card";
-import { ENTRY_LABEL, KIND_LABEL, ROLE_LABEL, TYPE_LABEL, plural } from "./labels";
+import { ENTRY_LABEL, KIND_LABEL, ROLE_LABEL, TYPE_LABEL, ZIGBEE_ROLE_LABEL, plural } from "./labels";
 import type { NetworkOptions } from "./options";
 import { Column, sortableTable } from "./table";
 
@@ -269,6 +269,45 @@ export function renderNetwork(
 				},
 			];
 			sortableTable(s, subnets, cols, state, "sortSubnets", { initial: { key: "network", dir: 1 }, tableClass: "hv-subnet-table" });
+		}
+	}
+
+	if (opts.show.includes("zigbee")) {
+		const nodes = entries.filter((e) => e.res.kind === "zigbee");
+		if (nodes.length) {
+			const s = section(root, "Zigbee", nodes.length);
+			const rank = (r?: string) => (r === "coordinator" ? 0 : r === "router" ? 1 : 2);
+			const cols: Column<NetworkEntry>[] = [
+				{ key: "name", label: "Name", render: (td, e) => nameCell(td, e, env), sort: (e) => e.res.name ?? "" },
+				{
+					key: "role",
+					label: "Rolle",
+					render: (td, e) => {
+						if (!e.res.zigbeeRole) return void el(td, "span", { cls: "hv-faint", text: "–" });
+						el(td, "span", { cls: `hv-badge hv-badge-zigbee is-${e.res.zigbeeRole}`, text: ZIGBEE_ROLE_LABEL[e.res.zigbeeRole] ?? e.res.zigbeeRole });
+					},
+					sort: (e) => rank(e.res.zigbeeRole),
+				},
+				{ key: "room", label: "Raum", render: (td, e) => void (td.textContent = e.res.room ?? "–"), sort: (e) => e.res.room ?? "" },
+				{
+					key: "ieee",
+					label: "IEEE",
+					cls: "hv-nowrap",
+					render: (td, e) => {
+						if (e.res.ieee) copyable(td, e.res.ieee, env);
+					},
+					sort: (e) => e.res.ieee ?? "",
+				},
+				{
+					key: "coordinator",
+					label: "Koordinator",
+					render: (td, e) => {
+						if (e.res.coordinator) refOrText(td, index, env, e.res.coordinator, ["device", "machine"]);
+					},
+					sort: (e) => e.res.coordinator ?? "",
+				},
+			];
+			sortableTable(s, nodes, cols, state, "sortZigbee", { initial: { key: "name", dir: 1 }, tableClass: "hv-zigbee-table" });
 		}
 	}
 

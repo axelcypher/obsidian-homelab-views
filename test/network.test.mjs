@@ -143,7 +143,7 @@ describe("network-flow: errors", () => {
 		assert.match(find(issuesOf("{schema: 1, kind: device, name: x, type: nas, rack: {name: W, position: 3}}"), "network-flow.rack").message, /erst ab schema: 2/);
 		assert.deepEqual(issuesOf("{schema: 1, kind: device, name: x, type: nas, rack: Wandschrank}"), []);
 		assert.match(find(issuesOf("{schema: 1, kind: rack, name: W, units: 12}"), "network-flow.kind").message, /erst ab schema: 2/);
-		assert.match(find(issuesOf("{schema: 5, kind: site, name: S}"), "network-flow.schema").message, /Version 5 ist unbekannt/);
+		assert.match(find(issuesOf("{schema: 6, kind: site, name: S}"), "network-flow.schema").message, /Version 6 ist unbekannt/);
 	});
 
 	test("rack placement rules", () => {
@@ -283,5 +283,36 @@ describe("network-flow schema 4: poe", () => {
 		assert.match(find(issuesOf("{schema: 4, kind: device, name: h, type: switch, front: [[1, 2]], poe: [1, 9]}"), "network-flow.poe[1]").message, /weder in front noch in back/);
 		assert.match(find(issuesOf("{schema: 4, kind: device, name: h, type: switch, front: [[1, 2]], poe: [1, 1]}"), "network-flow.poe[1]").message, /doppelt/);
 		assert.match(find(issuesOf("{schema: 3, kind: device, name: h, type: switch, poe: [1]}"), "network-flow.poe").message, /erst ab schema: 4/);
+	});
+});
+
+describe("network-flow schema 5: zigbee", () => {
+	const Z = `{schema: 5, kind: zigbee, name: Küche/Sensoren/Bewegungssensor, ieee: "0x00158D0001a2b3c4", role: end-device, coordinator: SLZB-MR3U, room: Küche}`;
+	test("valid block; ieee is read in lower case", () => {
+		const [p] = parseNetwork(y(Z));
+		assert.deepEqual(p.issues, []);
+		assert.equal(p.res.kind, "zigbee");
+		assert.equal(p.res.ieee, "0x00158d0001a2b3c4");
+		assert.equal(p.res.zigbeeRole, "end-device");
+		assert.equal(p.res.coordinator, "SLZB-MR3U");
+		assert.equal(p.res.room, "Küche");
+	});
+	test("unquoted ieee is read as a number and gets its own message", () => {
+		const issues = issuesOf(Z.replace('"0x00158D0001a2b3c4"', "0x00158d0001a2b3c4"));
+		assert.match(find(issues, "network-flow.ieee").message, /Anführungszeichen/);
+	});
+	test("bad ieee, missing fields, wrong role", () => {
+		assert.match(find(issuesOf(Z.replace("0x00158D0001a2b3c4", "0x1234")), "network-flow.ieee").message, /keine IEEE-Adresse/);
+		const issues = issuesOf("{schema: 5, kind: zigbee, name: x, role: hub}");
+		assert.ok(find(issues, "network-flow.ieee"));
+		assert.ok(find(issues, "network-flow.coordinator"));
+		assert.match(find(issues, "network-flow.role").message, /nicht erlaubt/);
+	});
+	test("zigbee only from schema 5; zigbee keys are not allowed at a device", () => {
+		assert.match(find(issuesOf(Z.replace("schema: 5", "schema: 4")), "network-flow.kind").message, /erst mit schema: 5/);
+		assert.match(find(issuesOf("{schema: 5, kind: device, name: d, type: other, ieee: \"0x00158d0001a2b3c4\"}"), "network-flow.ieee").message, /gehört nicht zu kind: device/);
+	});
+	test("schema 5 reads the other kinds like schema 4", () => {
+		assert.deepEqual(issuesOf("{schema: 5, kind: device, name: hpe, type: switch, front: [[1, 2]], poe: [1]}"), []);
 	});
 });

@@ -31,7 +31,7 @@ export interface TasksOptions extends CommonOptions {
 	group: boolean;
 }
 
-export type NetworkSection = "machines" | "apps" | "subnets";
+export type NetworkSection = "machines" | "apps" | "subnets" | "zigbee";
 
 export interface NetworkOptions extends CommonOptions {
 	show: NetworkSection[];
@@ -153,7 +153,7 @@ export function networkOptions(raw: unknown): Parsed<NetworkOptions> {
 	const runsOn = o["runs-on"];
 	return {
 		opts: {
-			show: strings(o.show, ["machines", "apps", "subnets"] as const, "show", problems) ?? ["machines", "apps", "subnets"],
+			show: strings(o.show, ["machines", "apps", "subnets", "zigbee"] as const, "show", problems) ?? ["machines", "apps", "subnets", "zigbee"],
 			path: path(o.path, problems),
 			entry: strings(o.entry, ENTRIES, "entry", problems)?.[0],
 			runsOn: typeof runsOn === "string" && runsOn.trim() ? runsOn.trim() : undefined,

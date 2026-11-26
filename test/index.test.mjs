@@ -74,6 +74,29 @@ ${block("b", "    copy-of: j")}`),
 	});
 });
 
+describe("index: zigbee checks across notes (schema 5)", () => {
+	const z = (name, ieee, role = "end-device", coordinator = "SLZB-MR3U") =>
+		`\n  - {schema: 5, kind: zigbee, name: "${name}", ieee: "${ieee}", role: ${role}, coordinator: ${coordinator}}`;
+	test("same ieee in two notes, same name at one coordinator, two coordinator blocks", () => {
+		const idx = buildIndex([
+			{ path: "docs/a.md", frontmatter: y(`network-flow:${z("Coordinator", "0x00124b0000000001", "coordinator")}${z("Flur/Lampe", "0x00158d0000000001", "router")}`) },
+			{ path: "docs/b.md", frontmatter: y(`network-flow:${z("Coordinator 2", "0x00124b0000000002", "coordinator")}${z("Flur/Lampe", "0x00158D0000000001")}`) },
+		]);
+		const msgs = idx.network.flatMap((e) => e.issues.map((i) => `${i.field}: ${i.message}`));
+		assert.equal(msgs.filter((m) => /IEEE 0x00158d0000000001 steht auch in/.test(m)).length, 2);
+		assert.equal(msgs.filter((m) => /Flur\/Lampe gibt es am Koordinator SLZB-MR3U mehrfach/.test(m)).length, 2);
+		assert.equal(msgs.filter((m) => /mehr als einen Block mit role: coordinator/.test(m)).length, 2);
+		// zigbee names are not part of the generic "mehrfach beschrieben" warning
+		assert.equal(msgs.filter((m) => /mehrfach beschrieben/.test(m)).length, 0);
+	});
+	test("same name at different coordinators is fine", () => {
+		const idx = buildIndex([
+			{ path: "docs/a.md", frontmatter: y(`network-flow:${z("Lampe", "0x00158d0000000001", "router", "A")}${z("Lampe", "0x00158d0000000002", "router", "B")}`) },
+		]);
+		assert.deepEqual(idx.network.flatMap((e) => e.issues), []);
+	});
+});
+
 describe("fixtures (example notes)", () => {
 	const idx = buildIndex(fixtureRecords());
 

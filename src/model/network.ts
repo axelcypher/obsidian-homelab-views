@@ -1,14 +1,16 @@
 /**
- * Frontmatter key `network-flow`, schema 1, 2 and 3
+ * Frontmatter key `network-flow`, schema 1 to 5
  * (vault: homelab-docs/projects/network-flow/Frontmatter für den Doku-Zustand.md).
  * Schema 3 (network-flow #113): `role` at subnets, `home` and `interfaces` at machines
  * and devices, `addresses[].iface`, `ports` (VLANs of switch ports) at devices.
  * Schema 4 (network-flow #117): `front`, `back` and `port-types` (front view) at machines and devices.
+ * Schema 5 (network-flow #128): the kind `zigbee`, one block per Zigbee node (coordinator included),
+ * identified by its IEEE address. Mesh links are never documented (live only).
  */
 import { Checker, Issue, Raw, blocksOf, isObject, show } from "./check";
 import { MAC, isCidr, isHostname, isIPv4, isIPv6, parseHostPort } from "./ip";
 
-export const NETWORK_KINDS = ["app", "machine", "device", "cluster", "subnet", "site", "rack"] as const;
+export const NETWORK_KINDS = ["app", "machine", "device", "cluster", "subnet", "site", "rack", "zigbee"] as const;
 export type NetworkKind = (typeof NETWORK_KINDS)[number];
 
 export const ENTRIES = ["internet", "intern", "beide"] as const;
@@ -19,6 +21,9 @@ export const MEDIA = ["LAN", "WLAN", "WireGuard"] as const;
 export const PROTOCOLS = ["tcp", "udp"] as const;
 export const SUBNET_ROLES = ["management", "admin", "server", "iot", "clients", "guest", "development", "gameserver", "storage", "vpn"] as const;
 export const PORT_TYPES = ["rj45", "sfp", "sfp+", "combo", "usb", "inlet", "outlet"] as const;
+export const ZIGBEE_ROLES = ["coordinator", "router", "end-device"] as const;
+/** IEEE address of a Zigbee node: 0x + 16 hex digits */
+export const IEEE = /^0x[0-9a-fA-F]{16}$/;
 /** Roles whose subnets get no card of their own (Netzwerk-Grundregeln R2). */
 export const NO_CARD_ROLES: readonly string[] = ["management", "storage"];
 
@@ -127,6 +132,14 @@ export interface NetworkResource {
 	role?: string;
 	// site
 	subnet?: string;
+	// zigbee (schema 5)
+	/** IEEE address, lower case: the identity of the node */
+	ieee?: string;
+	/** coordinator | router | end-device (key `role`) */
+	zigbeeRole?: string;
+	/** name of the device or machine that holds the coordinator */
+	coordinator?: string;
+	room?: string;
 	// rack
 	units?: number;
 	site?: string;
@@ -148,6 +161,7 @@ const KIND_KEYS: Record<NetworkKind, readonly string[]> = {
 	subnet: ["network", "vlan", "medium", "role"],
 	site: ["subnet"],
 	rack: ["units", "site", "shelves"],
+	zigbee: ["ieee", "role", "coordinator", "room"],
 };
 const BASE_KEYS = ["schema", "kind", "name"];
 /** Keys that only exist from schema 3 on, per kind. */
@@ -180,15 +194,16 @@ export function validateResource(raw: unknown, c: Checker): NetworkResource {
 
 	let schema = 0;
 	if (raw.schema === undefined || raw.schema === null) c.missing("schema");
-	else if (raw.schema === 1 || raw.schema === 2 || raw.schema === 3 || raw.schema === 4) schema = res.schema = raw.schema;
-	else if (typeof raw.schema === "number") c.error("schema", `Version ${raw.schema} ist unbekannt (bekannt: 1, 2, 3, 4)`);
-	else c.wrongType("schema", "die Zahl 1, 2, 3 oder 4", raw.schema);
+	else if (raw.schema === 1 || raw.schema === 2 || raw.schema === 3 || raw.schema === 4 || raw.schema === 5) schema = res.schema = raw.schema;
+	else if (typeof raw.schema === "number") c.error("schema", `Version ${raw.schema} ist unbekannt (bekannt: 1 bis 5)`);
+	else c.wrongType("schema", "eine Zahl von 1 bis 5", raw.schema);
 
 	const kind = c.str(raw, "kind", { required: true, oneOf: NETWORK_KINDS });
 	let known: NetworkKind | undefined;
 	if (kind && (NETWORK_KINDS as readonly string[]).includes(kind)) {
 		known = kind as NetworkKind;
 		if (known === "rack" && schema === 1) c.error("kind", "die Art rack gibt es erst ab schema: 2");
+		if (known === "zigbee" && schema !== 0 && schema < 5) c.error("kind", "die Art zigbee gibt es erst mit schema: 5");
 		res.kind = known;
 	}
 	res.name = c.str(raw, "name", { required: true });
@@ -268,6 +283,12 @@ export function validateResource(raw: unknown, c: Checker): NetworkResource {
 		case "site":
 			res.subnet = c.str(raw, "subnet");
 			break;
+		case "zigbee":
+			res.ieee = ieee(raw, c);
+			res.zigbeeRole = c.str(raw, "role", { required: true, oneOf: ZIGBEE_ROLES });
+			res.coordinator = c.str(raw, "coordinator", { required: true });
+			res.room = c.str(raw, "room");
+			break;
 		case "rack": {
 			res.units = c.int(raw, "units", { required: true, min: 1, max: 48 });
 			res.site = c.str(raw, "site");
@@ -291,6 +312,17 @@ export function validateResource(raw: unknown, c: Checker): NetworkResource {
 		}
 	}
 	return res;
+}
+
+/** schema 5: the IEEE address of a Zigbee node, quoted; read in lower case. */
+function ieee(raw: Raw, c: Checker): string | undefined {
+	const v = raw.ieee;
+	if (typeof v === "number" || typeof v === "bigint") {
+		c.error("ieee", "muss in Anführungszeichen stehen, z. B. ieee: \"0x00158d0001a2b3c4\"; ohne sie liest YAML eine Zahl und verliert Stellen");
+		return undefined;
+	}
+	const s = c.str(raw, "ieee", { required: true, pattern: IEEE, patternMsg: "keine IEEE-Adresse (0x und 16 Hex-Ziffern)" });
+	return s && IEEE.test(s) ? s.toLowerCase() : undefined;
 }
 
 function validateApp(raw: Raw, c: Checker, res: NetworkResource, schema: number): void {

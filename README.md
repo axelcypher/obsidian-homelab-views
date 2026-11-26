@@ -8,7 +8,7 @@ schedule – without Dataview or Bases. It reads three frontmatter keys:
 
 - **`backup`** – backup blocks, schema 1 (vault note
   `homelab-docs/projects/backup-ui/Frontmatter für Backups.md`)
-- **`network-flow`** – documented network state, schema 1 to 4 (vault note
+- **`network-flow`** – documented network state, schema 1 to 5 (vault note
   `homelab-docs/projects/network-flow/Frontmatter für den Doku-Zustand.md`)
 - **`tasks`** – scheduled work that is not a backup, schema 1, defined by this plugin (vault note
   `homelab-docs/projects/homelab-views/Frontmatter für geplante Aufgaben.md`)
@@ -29,7 +29,8 @@ top (or bottom) of the note, in reading view and Live Preview:
   network cards (schema 3, also cards without an IP, with the matching address), switch port VLANs
   (PVID, untagged, tagged), the **front and back view** (schema 4: rows of connectors with gaps,
   SFP/combo/USB/power drawn differently, PoE ports marked, linked ports highlighted, VLANs and connection on hover),
-  web interface, rack and connections; apps with their hostnames, entry
+  web interface, rack and connections; **Zigbee nodes** (schema 5, kind `zigbee`) as one table per note
+  with role (coordinator, router, end device), room, IEEE address and coordinator; apps with their hostnames, entry
   badge (Internet / Intern / Internet + intern, Cloudflare), target, Traefik instance, ports and
   `runs-on` linked to the machine's note; clusters, subnets, sites and racks.
 - **Backups:** one card per block, coloured by `system`: what, location (`source`, or `on` for
@@ -96,12 +97,16 @@ backups: true           # false: tasks only
 ### `homelab-network`
 
 Machines and devices (name, type, host, IP, subnet, MAC, home subnet, web interface), apps one row per
-hostname (hostname, entry, target, Traefik, runs on) and subnets (with their role). All columns are sortable; IP
-addresses sort numerically.
+hostname (hostname, entry, target, Traefik, runs on), subnets (with their role) and Zigbee nodes (name, role, room,
+IEEE, coordinator). All columns are sortable; IP addresses sort numerically.
+
+Zigbee nodes (schema 5) are checked across notes: an IEEE address may occur only once, a name only once per
+coordinator, and each coordinator has at most one block with `role: coordinator`. An unquoted IEEE address is
+read by YAML as a number and reported with its own message.
 
 ````markdown
 ```homelab-network
-show: [machines, apps, subnets]   # default: all three
+show: [machines, apps, subnets, zigbee]   # default: all four
 entry: internet                   # only hostnames reachable from the internet (incl. "beide")
 runs-on: vm-docker-01             # only apps on this machine or cluster
 path: homelab-docs/docs

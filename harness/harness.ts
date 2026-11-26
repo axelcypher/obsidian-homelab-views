@@ -131,6 +131,7 @@ const cards: Record<string, string> = {
 	"card-error": "Beispiel-Fehler.md",
 	"card-game": "Beispiel-Gameserver.md",
 	"card-cluster": "Beispiel-Cluster.md",
+	"card-zigbee": "Beispiel-Zigbee.md",
 };
 
 if (cards[view]) card(cards[view]);

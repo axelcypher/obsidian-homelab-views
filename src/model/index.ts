@@ -190,7 +190,7 @@ function checkNetwork(index: HomelabIndex): void {
 		const list = index.networkByName.get(name) ?? [];
 		list.push(e);
 		index.networkByName.set(name, list);
-		if (e.res.kind) {
+		if (e.res.kind && e.res.kind !== "zigbee") {
 			const k = `${e.res.kind}:${name}`;
 			byKindName.set(k, [...(byKindName.get(k) ?? []), e]);
 		}
@@ -202,6 +202,8 @@ function checkNetwork(index: HomelabIndex): void {
 			issue(e, "name", `${e.res.kind} ${e.res.name} ist mehrfach beschrieben, auch in ${others}`, "warning");
 		}
 	}
+
+	checkZigbee(index);
 
 	// A hostname is duplicate when two apps name it with the same path, or both without a path.
 	const hosts = new Map<string, { entry: NetworkEntry; i: number }[]>();
@@ -223,6 +225,26 @@ function checkNetwork(index: HomelabIndex): void {
 			issue(entry, `hostnames[${i}].name`, `Hostname auch bei ${others} (gleicher Pfad)`, "warning");
 		}
 	}
+}
+
+/** schema 5: IEEE unique over all notes; name unique per coordinator; one coordinator block per coordinator. */
+function checkZigbee(index: HomelabIndex): void {
+	const nodes = index.network.filter((e) => e.res.kind === "zigbee");
+	const group = (key: (e: NetworkEntry) => string | undefined) => {
+		const map = new Map<string, NetworkEntry[]>();
+		for (const e of nodes) {
+			const k = key(e);
+			if (k !== undefined) map.set(k, [...(map.get(k) ?? []), e]);
+		}
+		return [...map.values()].filter((l) => l.length > 1);
+	};
+	const others = (list: NetworkEntry[], e: NetworkEntry) => list.filter((o) => o !== e).map(where).join(", ");
+	for (const list of group((e) => e.res.ieee))
+		for (const e of list) issue(e, "ieee", `IEEE ${e.res.ieee} steht auch in ${others(list, e)}`);
+	for (const list of group((e) => (e.res.name && e.res.coordinator ? `${e.res.coordinator}\u0000${e.res.name}` : undefined)))
+		for (const e of list) issue(e, "name", `${e.res.name} gibt es am Koordinator ${e.res.coordinator} mehrfach, auch in ${others(list, e)}`);
+	for (const list of group((e) => (e.res.zigbeeRole === "coordinator" ? e.res.coordinator : undefined)))
+		for (const e of list) issue(e, "role", `${e.res.coordinator} hat mehr als einen Block mit role: coordinator, auch in ${others(list, e)}`);
 }
 
 // ---------------------------------------------------------------------------

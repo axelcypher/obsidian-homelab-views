@@ -28,7 +28,7 @@ import {
 	titleIsJob,
 	webUrl,
 } from "./common";
-import { CONNECTION_LABEL, ENTRY_LABEL, KIND_ICON, KIND_LABEL, ROLE_LABEL, TYPE_LABEL, plural } from "./labels";
+import { CONNECTION_LABEL, ENTRY_LABEL, KIND_ICON, KIND_LABEL, ROLE_LABEL, TYPE_LABEL, ZIGBEE_ROLE_LABEL, plural } from "./labels";
 
 export interface CardData {
 	note: NoteRef;
@@ -57,11 +57,13 @@ export function renderNoteCard(
 	if (showNet) {
 		const section = el(root, "div", "hv-section hv-section-net");
 		const subnets = data.network.filter((e) => e.res.kind === "subnet");
+		const zigbee = data.network.filter((e) => e.res.kind === "zigbee");
 		for (const e of data.network) {
-			if (e.res.kind === "subnet") continue;
+			if (e.res.kind === "subnet" || e.res.kind === "zigbee") continue;
 			networkCard(section, e, index, env);
 		}
 		if (subnets.length) subnetCard(section, subnets, env);
+		if (zigbee.length) zigbeeCard(section, zigbee, index, env);
 	}
 
 	if (showBackup) {
@@ -342,6 +344,53 @@ function subnetCard(parent: HTMLElement, subnets: NetworkEntry[], env: RenderEnv
 	}
 	const issues = subnets.flatMap((s) => s.issues);
 	issuesView(card, issues, "", env);
+}
+
+/** schema 5: all Zigbee nodes of the note in one table, the coordinator first. */
+function zigbeeCard(parent: HTMLElement, nodes: NetworkEntry[], index: HomelabIndex, env: RenderEnv): void {
+	const card = el(parent, "div", "hv-card hv-net hv-net-zigbee");
+	const head = el(card, "div", "hv-card-head");
+	icon(head, env, KIND_ICON.zigbee, "hv-icon hv-card-icon");
+	const main = el(head, "div", "hv-card-head-main");
+	const row = el(main, "div", "hv-card-title-row");
+	el(row, "span", { cls: "hv-card-title", text: "Zigbee" });
+	el(row, "span", { cls: "hv-kind", text: String(nodes.length) });
+	const coordinators = [...new Set(nodes.map((n) => n.res.coordinator).filter((c): c is string => !!c))];
+	if (coordinators.length) {
+		const sub = el(main, "div", "hv-card-sub");
+		txt(sub, coordinators.length === 1 ? "Koordinator " : "Koordinatoren ");
+		coordinators.forEach((c, i) => {
+			if (i) txt(sub, ", ");
+			noteLinkOrText(sub, c, index, env, ["device", "machine"]);
+		});
+		const count = (r: string) => nodes.filter((n) => n.res.zigbeeRole === r).length;
+		const counts = [
+			count("router") ? plural(count("router"), "Router", "Router") : "",
+			count("end-device") ? plural(count("end-device"), "Endgerät", "Endgeräte") : "",
+		].filter(Boolean);
+		if (counts.length) txt(sub, ` · ${counts.join(" · ")}`);
+	}
+	const wrap = el(el(card, "div", "hv-card-body"), "div", "hv-table-wrap hv-card-table");
+	const table = el(wrap, "table", "hv-table is-compact");
+	const tr = el(el(table, "thead"), "tr");
+	const withCoord = coordinators.length > 1;
+	for (const h of ["Name", "Rolle", "Raum", "IEEE", ...(withCoord ? ["Koordinator"] : [])]) el(tr, "th", { text: h });
+	const tbody = el(table, "tbody");
+	const rank = (r?: string) => (r === "coordinator" ? 0 : 1);
+	const sorted = [...nodes].sort(
+		(a, b) => rank(a.res.zigbeeRole) - rank(b.res.zigbeeRole) || (a.res.name ?? "").localeCompare(b.res.name ?? "", "de"),
+	);
+	for (const n of sorted) {
+		const r = el(tbody, "tr");
+		el(r, "td", { cls: "hv-strong", text: n.res.name ?? "" });
+		const role = el(r, "td");
+		if (n.res.zigbeeRole) el(role, "span", { cls: `hv-badge hv-badge-zigbee is-${n.res.zigbeeRole}`, text: ZIGBEE_ROLE_LABEL[n.res.zigbeeRole] ?? n.res.zigbeeRole });
+		el(r, "td", { text: n.res.room ?? "–" });
+		const ieeeCell = el(r, "td", "hv-nowrap");
+		if (n.res.ieee) copyable(ieeeCell, n.res.ieee, env);
+		if (withCoord) el(r, "td", { text: n.res.coordinator ?? "–" });
+	}
+	issuesView(card, nodes.flatMap((n) => n.issues), "", env);
 }
 
 // ---------------------------------------------------------------------------

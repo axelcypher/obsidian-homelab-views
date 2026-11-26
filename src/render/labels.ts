@@ -86,6 +86,7 @@ export const KIND_LABEL: Record<string, string> = {
 	subnet: "Subnetz",
 	site: "Standort",
 	rack: "Rack",
+	zigbee: "Zigbee",
 };
 
 export const KIND_ICON: Record<string, string> = {
@@ -96,6 +97,13 @@ export const KIND_ICON: Record<string, string> = {
 	subnet: "network",
 	site: "map-pin",
 	rack: "server",
+	zigbee: "radio",
+};
+
+export const ZIGBEE_ROLE_LABEL: Record<string, string> = {
+	coordinator: "Koordinator",
+	router: "Router",
+	"end-device": "Endgerät",
 };
 
 export const TYPE_LABEL: Record<string, string> = {

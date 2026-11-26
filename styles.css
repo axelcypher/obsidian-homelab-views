@@ -840,6 +840,11 @@ input.hv-invalid { border-color: var(--text-error) !important; }
 }
 .hv-root .hv-badge-kind { background: var(--hv-bg-soft); color: var(--text-muted); }
 .hv-root .hv-badge-kind.is-reboot { color: var(--text-normal); background: rgba(var(--color-red-rgb), 0.12); }
+
+/* Zigbee nodes (network-flow schema 5) */
+.hv-root .hv-badge-zigbee { background: var(--hv-bg-soft); color: var(--text-muted); }
+.hv-root .hv-badge-zigbee.is-coordinator { color: var(--text-normal); background: rgba(var(--color-purple-rgb), 0.16); }
+.hv-root .hv-badge-zigbee.is-router { color: var(--text-normal); background: rgba(var(--color-blue-rgb), 0.12); }
 .hv-bk.hv-task { background: transparent; border-style: dashed; }
 .hv-bk.hv-task::before {
 	background: repeating-linear-gradient(180deg, var(--hv-c) 0 6px, transparent 6px 10px);
