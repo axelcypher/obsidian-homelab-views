@@ -361,7 +361,10 @@ export function backupCard(parent: HTMLElement, e: BackupEntry, here: NoteRef, e
 		el(c, "span", { text: "Kopie von " });
 		if (e.original && e.original.note.path !== here.path) env.link(c, e.original.note, b.copyOf, "hv-ref hv-mono");
 		else el(c, "span", { cls: `hv-ref hv-mono${e.original ? "" : " is-unresolved"}`, text: b.copyOf });
-		if (e.original?.block.what) el(c, "span", { cls: "hv-faint", text: ` · ${e.original.block.what}` });
+		// the original's description only when it says something the copy's own title doesn't
+		const ownWhat = b.what?.trim();
+		const origWhat = e.original?.block.what?.trim();
+		if (origWhat && origWhat !== ownWhat) el(c, "span", { cls: "hv-faint", text: ` · ${origWhat}` });
 	}
 	if (e.copies.length) {
 		const c = el(card, "div", "hv-copyof is-has-copies");

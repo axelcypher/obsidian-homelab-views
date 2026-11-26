@@ -1,7 +1,7 @@
 {
   "id": "axlc-homelab-views",
   "name": "Homelab Views",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "minAppVersion": "1.4.0",
   "description": "Renders the backup and network-flow frontmatter of the homelab docs as note cards, tables and a schedule timeline.",
   "author": "axelcypher",
