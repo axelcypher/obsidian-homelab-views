@@ -1,0 +1,41 @@
+# Veröffentlicht automatisch, sobald auf main eine neue Version in manifest.json steht:
+# legt den Tag x.y.z an und startet den gemeinsamen Release-Workflow (release.yml).
+# Tags, die mit dem GITHUB_TOKEN gepusht werden, starten keine Workflows; deshalb
+# wird release.yml ausdrücklich per workflow_dispatch angestoßen.
+
+name: Auto release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: auto-release
+  cancel-in-progress: false
+
+jobs:
+  tag-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Tag new version and dispatch the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V=$(node -p "require('./manifest.json').version")
+          if git rev-parse -q --verify "refs/tags/$V" >/dev/null; then
+            echo "Tag $V existiert schon, nichts zu tun."
+            exit 0
+          fi
+          git tag "$V" "$GITHUB_SHA"
+          git push origin "refs/tags/$V"
+          gh workflow run release.yml --ref main -f tag="$V"
+          echo "Tag $V angelegt, Release-Workflow gestartet."
