@@ -207,6 +207,19 @@ occurrences, overlaps), `src/render` (DOM renderers, no Obsidian dependency), `s
 `src/store.ts`, `src/inject.ts`, `src/settings.ts` (Obsidian glue), `styles.css` (Obsidian CSS
 variables only).
 
+### Checking the vault
+
+`scripts/validate-vault.mjs` runs every frontmatter block of the vault (network-flow, backup, tasks,
+app) through the plugin's core and prints all issues. It needs `npm ci && npm test` in the plugin
+checkout first (that builds `build/test/core.mjs`):
+
+```bash
+HV_PLUGIN=<path to obsidian-homelab-views> node scripts/validate-vault.mjs <vault root or homelab-docs/docs> [--overlaps]
+```
+
+The last line must show `issues 0`. `--overlaps` also lists schedule collisions of tasks with other
+jobs for one week. Folders `_privat`/`_private` are skipped.
+
 ## Installation
 
 Installed and updated by the [Revamp Manager](https://github.com/axelcypher/obsidian-revamp-manager)
