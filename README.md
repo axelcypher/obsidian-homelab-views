@@ -12,6 +12,8 @@ schedule – without Dataview or Bases. It reads three frontmatter keys:
   `homelab-docs/projects/network-flow/Frontmatter für den Doku-Zustand.md`)
 - **`tasks`** – scheduled work that is not a backup, schema 1, defined by this plugin (vault note
   `homelab-docs/projects/homelab-views/Frontmatter für geplante Aufgaben.md`)
+- **`app`** – the profile of an app ("App-Steckbrief"), schema 1, defined by this plugin (vault note
+  `homelab-docs/projects/homelab-views/Frontmatter für App-Steckbriefe.md`)
 
 All schemas are implemented strictly, including their validation: unknown fields, missing
 required fields, wrong types and invalid values are shown per block with the field path and the
@@ -20,8 +22,14 @@ notes. Folders named `_privat` or `_private` are never read. All UI text is Germ
 
 ## Note card
 
-Every note with `backup` and/or `network-flow` frontmatter shows a card view of its own data at the
+Every note with `app`, `backup`, `network-flow` or `tasks` frontmatter shows a card view of its own data at the
 top (or bottom) of the note, in reading view and Live Preview:
+
+- **App profile** (`app`): what the app is for, platform (k3s, Docker, HA add-on, host) and status,
+  deployment (Argo CD application, Komodo stack, add-on), repo path (linked to gitops-homelab),
+  namespace, databases, data paths, the Vault paths it reads with their key names (a badge when the
+  path belongs to another app), links, and a version table with the newest version and the update
+  type (patch, minor, major) plus the date of the last check.
 
 - **Network:** machines and devices with their addresses (IP, subnet, guest interface, MAC –
   monospace, click to copy), host, cluster, **home subnet** (rule R1 of the vault note
@@ -133,6 +141,20 @@ backup or job window of the same note is a *Kollision*; other tasks overlapping 
 note are an *Überschneidung*. Options there: `tasks: false` hides them, `runner: […]` filters
 them, `backups: false` shows only the tasks.
 
+### `homelab-apps`
+
+All app profiles as a table: app, platform and status, deployment, pending updates
+(component, current → newest) and the date of the last check. Sortable.
+
+````markdown
+```homelab-apps
+platform: [k3s, docker]   # k3s, docker, ha-addon, host; default: all
+status: running           # running, stopped, planned, retired
+updates: true             # only apps with pending updates
+path: homelab-docs/docs/apps
+```
+````
+
 ### `homelab-card`
 
 The card view placed by hand, for the current note or another one:
@@ -140,7 +162,7 @@ The card view placed by hand, for the current note or another one:
 ````markdown
 ```homelab-card
 note: "[[vm-docker-01]]"   # default: this note
-show: [network, backup, tasks]   # default: all
+show: [app, network, backup, tasks]   # default: all
 ```
 ````
 
@@ -188,8 +210,9 @@ variables only).
 ## Installation
 
 Installed and updated by the [Revamp Manager](https://github.com/axelcypher/obsidian-revamp-manager)
-once the repo carries the topic `axlc-obsidian-revamp` and has a release (push a tag `x.y.z`; the
-workflow builds and publishes `main.js`, `manifest.json` and `styles.css`).
+once the repo carries the topic `axlc-obsidian-revamp` and has a release. Releases happen on their own:
+when a push to `main` carries a new version in `manifest.json`, the workflow `auto-release.yml` tags it
+and starts `release.yml`, which builds and publishes `main.js`, `manifest.json` and `styles.css`.
 
 ## Notes
 

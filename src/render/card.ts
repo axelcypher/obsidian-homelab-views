@@ -1,9 +1,10 @@
 /** Card view of one note: its network-flow resources and its backup blocks. */
-import { BackupEntry, HomelabIndex, NetworkEntry, NoteRef, TaskEntry, backupTitle, errorCount, findResourceNote, homeSubnet, taskTitle } from "../model/index";
+import { AppEntry, BackupEntry, HomelabIndex, NetworkEntry, NoteRef, TaskEntry, backupTitle, errorCount, findResourceNote, homeSubnet, taskTitle } from "../model/index";
 import { addressSortKey, compareKeys } from "../model/ip";
 import { NO_CARD_ROLES } from "../model/network";
 import type { NetworkResource } from "../model/network";
 import { formatDuration, labelRun, nextRun } from "../schedule/schedule";
+import { appCard } from "./app";
 import { breakable, el, txt } from "./dom";
 import type { RenderEnv } from "./env";
 import {
@@ -35,9 +36,11 @@ export interface CardData {
 	backups: BackupEntry[];
 	network: NetworkEntry[];
 	tasks?: TaskEntry[];
+	apps?: AppEntry[];
 }
 
 export interface CardOptions {
+	app?: boolean;
 	network?: boolean;
 	backup?: boolean;
 	tasks?: boolean;
@@ -51,6 +54,12 @@ export function renderNoteCard(
 	opts: CardOptions = {},
 ): HTMLElement {
 	const root = el(parent, "div", "hv-root hv-note");
+	const apps = data.apps ?? [];
+	const showApp = opts.app !== false && apps.length > 0;
+	if (showApp) {
+		const section = el(root, "div", "hv-section hv-section-app");
+		for (const e of apps) appCard(section, e, env);
+	}
 	const showNet = opts.network !== false && data.network.length > 0;
 	const showBackup = opts.backup !== false && data.backups.length > 0;
 
@@ -82,7 +91,7 @@ export function renderNoteCard(
 		for (const e of tasks) taskCard(grid, e, env);
 	}
 
-	if (!showNet && !showBackup && !showTasks) el(root, "div", { cls: "hv-empty", text: "Keine Homelab-Daten in dieser Notiz." });
+	if (!showApp && !showNet && !showBackup && !showTasks) el(root, "div", { cls: "hv-empty", text: "Keine Homelab-Daten in dieser Notiz." });
 	return root;
 }
 

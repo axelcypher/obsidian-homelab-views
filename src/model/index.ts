@@ -7,6 +7,7 @@ import { Issue } from "./check";
 import { BackupBlock, ParsedBackup, parseBackups, targetKey } from "./backup";
 import { NO_CARD_ROLES, NetworkResource, ParsedResource, parseNetwork } from "./network";
 import { ParsedTask, TaskBlock, parseTasks } from "./tasks";
+import { ParsedApp, parseApps } from "./app";
 
 export interface NoteRecord {
 	path: string;
@@ -40,20 +41,27 @@ export interface TaskEntry extends ParsedTask {
 	key: string;
 }
 
+export interface AppEntry extends ParsedApp {
+	note: NoteRef;
+	key: string;
+}
+
 export interface HomelabIndex {
 	backups: BackupEntry[];
 	network: NetworkEntry[];
 	tasks: TaskEntry[];
+	apps: AppEntry[];
 	/** Blocks by `id` (only ids that occur once) */
 	backupById: Map<string, BackupEntry>;
 	/** Resources by name (all kinds) */
 	networkByName: Map<string, NetworkEntry[]>;
-	byNote: Map<string, { backups: BackupEntry[]; network: NetworkEntry[]; tasks: TaskEntry[] }>;
+	byNote: Map<string, { backups: BackupEntry[]; network: NetworkEntry[]; tasks: TaskEntry[]; apps: AppEntry[] }>;
 }
 
 export const BACKUP_KEY = "backup";
 export const NETWORK_KEY = "network-flow";
 export const TASKS_KEY = "tasks";
+export const APP_KEY = "app";
 
 export function noteRef(path: string): NoteRef {
 	const file = path.split("/").pop() ?? path;
@@ -72,7 +80,7 @@ export function inFolder(path: string, folder: string): boolean {
 }
 
 export function hasHomelabData(fm: Record<string, unknown> | null | undefined): boolean {
-	return !!fm && (fm[BACKUP_KEY] !== undefined || fm[NETWORK_KEY] !== undefined || fm[TASKS_KEY] !== undefined);
+	return !!fm && (fm[BACKUP_KEY] !== undefined || fm[NETWORK_KEY] !== undefined || fm[TASKS_KEY] !== undefined || fm[APP_KEY] !== undefined);
 }
 
 export function buildIndex(records: NoteRecord[]): HomelabIndex {
@@ -80,6 +88,7 @@ export function buildIndex(records: NoteRecord[]): HomelabIndex {
 		backups: [],
 		network: [],
 		tasks: [],
+		apps: [],
 		backupById: new Map(),
 		networkByName: new Map(),
 		byNote: new Map(),
@@ -107,15 +116,22 @@ export function buildIndex(records: NoteRecord[]): HomelabIndex {
 			note,
 			key: `${note.path}#t${p.index}`,
 		}));
+		const apps: AppEntry[] = parseApps(fm[APP_KEY]).map((p) => ({
+			...p,
+			note,
+			key: `${note.path}#a${p.index}`,
+		}));
 		index.backups.push(...backups);
 		index.network.push(...network);
 		index.tasks.push(...tasks);
-		index.byNote.set(note.path, { backups, network, tasks });
+		index.apps.push(...apps);
+		index.byNote.set(note.path, { backups, network, tasks, apps });
 	}
 
 	checkBackupIds(index);
 	checkTaskIds(index);
 	checkNetwork(index);
+	checkAppNames(index);
 	return index;
 }
 
@@ -224,6 +240,16 @@ function checkNetwork(index: HomelabIndex): void {
 				.join(", ");
 			issue(entry, `hostnames[${i}].name`, `Hostname auch bei ${others} (gleicher Pfad)`, "warning");
 		}
+	}
+}
+
+/** `app`: one profile per app name over all notes. */
+function checkAppNames(index: HomelabIndex): void {
+	const byName = new Map<string, AppEntry[]>();
+	for (const e of index.apps) if (e.block.name) byName.set(e.block.name, [...(byName.get(e.block.name) ?? []), e]);
+	for (const list of byName.values()) {
+		if (list.length < 2) continue;
+		for (const e of list) issue(e, "name", `App ${e.block.name} hat auch einen Steckbrief in ${list.filter((o) => o !== e).map(where).join(", ")}`, "warning");
 	}
 }
 

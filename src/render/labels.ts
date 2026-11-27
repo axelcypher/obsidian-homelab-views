@@ -100,6 +100,45 @@ export const KIND_ICON: Record<string, string> = {
 	zigbee: "radio",
 };
 
+export const PLATFORM_LABEL: Record<string, string> = {
+	k3s: "k3s",
+	docker: "Docker",
+	"ha-addon": "HA-Add-on",
+	host: "Host",
+};
+
+export const APP_STATUS_LABEL: Record<string, string> = {
+	running: "läuft",
+	stopped: "gestoppt",
+	planned: "geplant",
+	retired: "stillgelegt",
+};
+
+export const DEPLOY_LABEL: Record<string, string> = {
+	argocd: "Argo CD",
+	komodo: "Komodo",
+	addon: "Add-on",
+	manual: "von Hand",
+};
+
+export const UPDATE_LABEL: Record<string, string> = {
+	none: "aktuell",
+	patch: "Patch",
+	minor: "Minor",
+	major: "Major",
+};
+
+export const DB_ENGINE_LABEL: Record<string, string> = {
+	postgres: "PostgreSQL",
+	mariadb: "MariaDB",
+	mysql: "MySQL",
+	mongo: "MongoDB",
+	sqlite: "SQLite",
+	redis: "Redis",
+	valkey: "Valkey",
+	other: "andere",
+};
+
 export const ZIGBEE_ROLE_LABEL: Record<string, string> = {
 	coordinator: "Koordinator",
 	router: "Router",

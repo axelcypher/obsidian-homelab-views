@@ -6,10 +6,11 @@ import { NoteRef, inFolder, isPrivatePath, noteRef } from "./model/index";
 import { clear, el } from "./render/dom";
 import type { RenderEnv, ViewState } from "./render/env";
 import { optionNotice } from "./render/common";
-import { backupsOptions, cardOptions, networkOptions, scheduleOptions, tasksOptions } from "./render/options";
+import { appsOptions, backupsOptions, cardOptions, networkOptions, scheduleOptions, tasksOptions } from "./render/options";
 import { renderBackups } from "./render/backups";
 import { renderSchedule } from "./render/schedule";
 import { renderNetwork } from "./render/network";
+import { renderApps } from "./render/app";
 import { renderNoteCard } from "./render/card";
 import { renderTasks } from "./render/tasks";
 
@@ -21,7 +22,7 @@ const ICON_FALLBACK: Record<string, string> = {
 	"app-window": "app-window-mac",
 };
 
-export const BLOCKS = ["homelab-backups", "homelab-schedule", "homelab-tasks", "homelab-network", "homelab-card"] as const;
+export const BLOCKS = ["homelab-backups", "homelab-schedule", "homelab-tasks", "homelab-network", "homelab-card", "homelab-apps"] as const;
 type BlockKind = (typeof BLOCKS)[number];
 
 export default class HomelabViewsPlugin extends Plugin {
@@ -172,10 +173,19 @@ export default class HomelabViewsPlugin extends Plugin {
 			const index = store.indexForNote(path);
 			const data = index.byNote.get(path);
 			if (!data) {
-				el(container, "div", { cls: "hv-root hv-empty", text: `Keine backup-, tasks- oder network-flow-Daten in „${noteRef(path).name}“.` });
+				el(container, "div", { cls: "hv-root hv-empty", text: `Keine app-, backup-, tasks- oder network-flow-Daten in „${noteRef(path).name}“.` });
 				return;
 			}
 			renderNoteCard(container, { note: noteRef(path), ...data }, index, env, opts);
+			return;
+		}
+
+		if (kind === "homelab-apps") {
+			const { opts, problems } = appsOptions(raw);
+			optionNotice(container, problems, env);
+			const index = store.index(store.baseFolder(opts.path));
+			const entries = index.apps.filter((e) => !opts.path || inFolder(e.note.path, opts.path));
+			renderApps(container, entries, index, env, opts, state);
 			return;
 		}
 

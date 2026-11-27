@@ -8,6 +8,7 @@ import {
 	HomelabIndex,
 	NETWORK_KEY,
 	TASKS_KEY,
+	APP_KEY,
 	NoteRecord,
 	buildIndex,
 	hasHomelabData,
@@ -36,7 +37,7 @@ export class HomelabStore extends Events {
 
 	static signature(fm: Record<string, unknown> | null | undefined): string {
 		if (!hasHomelabData(fm) || !fm) return "";
-		return JSON.stringify([fm[BACKUP_KEY] ?? null, fm[NETWORK_KEY] ?? null, fm[TASKS_KEY] ?? null]);
+		return JSON.stringify([fm[BACKUP_KEY] ?? null, fm[NETWORK_KEY] ?? null, fm[TASKS_KEY] ?? null, fm[APP_KEY] ?? null]);
 	}
 
 	frontmatter(file: TFile): Record<string, unknown> | undefined {
@@ -60,7 +61,7 @@ export class HomelabStore extends Events {
 		if (!idx) {
 			idx = buildIndex(this.records(folder));
 			this.cache.set(key, idx);
-			for (const e of [...idx.backups, ...idx.network, ...idx.tasks]) {
+			for (const e of [...idx.backups, ...idx.network, ...idx.tasks, ...idx.apps]) {
 				const file = this.app.vault.getAbstractFileByPath(e.note.path);
 				if (file instanceof TFile) this.signatures.set(file.path, HomelabStore.signature(this.frontmatter(file)));
 			}

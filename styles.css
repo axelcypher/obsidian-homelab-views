@@ -924,3 +924,19 @@ input.hv-invalid { border-color: var(--text-error) !important; }
 	border-radius: 50%;
 	background: var(--color-yellow);
 }
+
+/* App profile (`app` frontmatter) */
+.hv-root .hv-app-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; line-height: 1.6em; }
+.hv-root .hv-app-line .hv-chips { flex-basis: 100%; }
+.hv-root .hv-subhead { display: flex; justify-content: space-between; gap: 8px; margin: 14px 0 6px; font-size: var(--font-ui-small); font-weight: 600; color: var(--text-muted); }
+.hv-root .hv-badge-platform { background: var(--hv-bg-soft); color: var(--text-muted); }
+.hv-root .hv-badge-platform.is-k3s { color: var(--text-normal); background: rgba(var(--color-blue-rgb), 0.14); }
+.hv-root .hv-badge-platform.is-docker { color: var(--text-normal); background: rgba(var(--color-cyan-rgb), 0.14); }
+.hv-root .hv-badge-platform.is-ha-addon { color: var(--text-normal); background: rgba(var(--color-green-rgb), 0.14); }
+.hv-root .hv-badge-status { background: transparent; border: 1px dashed var(--hv-border-strong); color: var(--text-muted); padding: 0 7px; }
+.hv-root .hv-badge-shared { background: rgba(var(--color-orange-rgb), 0.14); color: var(--text-normal); }
+.hv-root .hv-badge-update { background: var(--hv-bg-soft); color: var(--text-muted); }
+.hv-root .hv-badge-update.is-patch { color: var(--text-normal); background: rgba(var(--color-blue-rgb), 0.12); }
+.hv-root .hv-badge-update.is-minor { color: var(--text-normal); background: rgba(var(--color-yellow-rgb), 0.18); }
+.hv-root .hv-badge-update.is-major { color: var(--text-normal); background: rgba(var(--color-red-rgb), 0.14); }
+.hv-root .hv-app.is-stopped, .hv-root .hv-app.is-retired { opacity: 0.75; }

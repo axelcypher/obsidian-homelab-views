@@ -1,4 +1,5 @@
 /** Options of the code blocks, given as YAML inside the block. */
+import { APP_PLATFORMS, APP_STATUSES, AppPlatform } from "../model/app";
 import { BACKUP_SYSTEMS, BackupSystem } from "../model/backup";
 import { isObject } from "../model/check";
 import { ENTRIES } from "../model/network";
@@ -44,6 +45,13 @@ export interface CardBlockOptions {
 	network: boolean;
 	backup: boolean;
 	tasks: boolean;
+	app: boolean;
+}
+
+export interface AppsOptions extends CommonOptions {
+	platform?: AppPlatform[];
+	status?: string[];
+	updates: boolean;
 }
 
 export interface Parsed<T> {
@@ -166,7 +174,7 @@ export function cardOptions(raw: unknown): Parsed<CardBlockOptions> {
 	const problems: string[] = [];
 	const o = asObject(raw, problems);
 	unknown(o, ["note", "show"], problems);
-	const show = strings(o.show, ["network", "backup", "tasks"] as const, "show", problems);
+	const show = strings(o.show, ["app", "network", "backup", "tasks"] as const, "show", problems);
 	let note: string | undefined;
 	if (typeof o.note === "string") note = o.note.trim().replace(/^\[\[|\]\]$/g, "").split("|")[0];
 	// YAML reads an unquoted [[Note]] as a nested list
@@ -178,6 +186,22 @@ export function cardOptions(raw: unknown): Parsed<CardBlockOptions> {
 			network: show ? show.includes("network") : true,
 			backup: show ? show.includes("backup") : true,
 			tasks: show ? show.includes("tasks") : true,
+			app: show ? show.includes("app") : true,
+		},
+		problems,
+	};
+}
+
+export function appsOptions(raw: unknown): Parsed<AppsOptions> {
+	const problems: string[] = [];
+	const o = asObject(raw, problems);
+	unknown(o, ["platform", "status", "updates", "path"], problems);
+	return {
+		opts: {
+			platform: strings(o.platform, APP_PLATFORMS, "platform", problems),
+			status: strings(o.status, APP_STATUSES, "status", problems),
+			updates: bool(o.updates, "updates", false, problems),
+			path: path(o.path, problems),
 		},
 		problems,
 	};

@@ -1,4 +1,25 @@
 ---
+app:
+  schema: 1
+  name: beispiel-app
+  what: Erfundene Beispiel-App mit Weboberfläche und Datenbank
+  platform: docker
+  deploy: {komodo: beispiel-app}
+  repo: apps/docker/beispiel-app
+  versions:
+    - {name: example/beispiel-app, version: 2.4.1, latest: 3.0.0, update: major, source: "https://example.invalid/releases"}
+    - {name: postgres, version: "16", latest: "16", update: none}
+  checked: 2026-11-27
+  secrets:
+    - {path: kv/docker-secrets/beispiel-app, keys: [DB_PASSWORD, ADMIN_TOKEN]}
+    - {path: kv/docker-secrets/persistent-data-backup, keys: [BACKUP_PASSWORD], from: backup}
+  storage:
+    - {path: /data/persistent/beispiel-app, what: Uploads}
+    - {path: /data/db/beispiel-app, what: PostgreSQL}
+  databases:
+    - {engine: postgres, name: beispiel}
+  links:
+    - {title: Doku, url: "https://example.invalid/docs"}
 network-flow:
   - schema: 1
     kind: app
