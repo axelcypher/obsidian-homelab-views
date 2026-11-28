@@ -8,7 +8,7 @@ schedule – without Dataview or Bases. It reads three frontmatter keys:
 
 - **`backup`** – backup blocks, schema 1 (vault note
   `homelab-docs/projects/backup-ui/Frontmatter für Backups.md`)
-- **`network-flow`** – documented network state, schema 1 to 5 (vault note
+- **`network-flow`** – documented network state, schema 1 to 6 (vault note
   `homelab-docs/projects/network-flow/Frontmatter für den Doku-Zustand.md`)
 - **`tasks`** – scheduled work that is not a backup, schema 1, defined by this plugin (vault note
   `homelab-docs/projects/homelab-views/Frontmatter für geplante Aufgaben.md`)
@@ -111,6 +111,10 @@ IEEE, coordinator). All columns are sortable; IP addresses sort numerically.
 Zigbee nodes (schema 5) are checked across notes: an IEEE address may occur only once, a name only once per
 coordinator, and each coordinator has at most one block with `role: coordinator`. An unquoted IEEE address is
 read by YAML as a number and reported with its own message.
+
+A hostname with `fallback: true` (schema 6) is a fallback target behind Caddy's health check: it may share the hostname
+with one main target at another app (no duplicate warning) and shows the badge „Ausweichziel“; a fallback without a main
+target at another app is a warning.
 
 ````markdown
 ```homelab-network

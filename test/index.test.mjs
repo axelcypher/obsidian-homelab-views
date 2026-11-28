@@ -72,6 +72,20 @@ ${block("b", "    copy-of: j")}`),
 		]);
 		assert.ok(ok.network.every((e) => e.issues.length === 0));
 	});
+
+	test("schema 6: a fallback target beside a main target is fine, alone it is a warning", () => {
+		const app = (name, fallback, schema = 6) => ({ schema, kind: "app", name, "runs-on": ["vm"], hostnames: [{ name: "couchdb.example", entry: "intern", target: "10.0.0.1:443", ...(fallback === undefined ? {} : { fallback }) }] });
+		const pair = buildIndex([
+			{ path: "a.md", frontmatter: { "network-flow": app("a") } },
+			{ path: "b.md", frontmatter: { "network-flow": app("b", true) } },
+		]);
+		assert.ok(pair.network.every((e) => e.issues.length === 0));
+		assert.equal(pair.network.find((e) => e.res.name === "b").res.hostnames[0].fallback, true);
+		const alone = buildIndex([{ path: "b.md", frontmatter: { "network-flow": app("b", true) } }]);
+		assert.ok(alone.network[0].issues.some((i) => i.field.endsWith("fallback") && /ohne Hauptziel/.test(i.message)));
+		const old = buildIndex([{ path: "b.md", frontmatter: { "network-flow": app("b", true, 5) } }]);
+		assert.ok(old.network[0].issues.some((i) => /schema: 6/.test(i.message)));
+	});
 });
 
 describe("index: zigbee checks across notes (schema 5)", () => {

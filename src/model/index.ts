@@ -221,16 +221,22 @@ function checkNetwork(index: HomelabIndex): void {
 
 	checkZigbee(index);
 
-	// A hostname is duplicate when two apps name it with the same path, or both without a path.
-	const hosts = new Map<string, { entry: NetworkEntry; i: number }[]>();
+	// A hostname is duplicate when two apps name it with the same path, or both without a path. A fallback target
+	// (schema 6) beside one main target is fine; a fallback without a main target at another app is a warning.
+	const hosts = new Map<string, { entry: NetworkEntry; i: number; fallback: boolean }[]>();
 	for (const e of index.network) {
 		if (e.res.kind !== "app") continue;
 		e.res.hostnames?.forEach((h, i) => {
 			const k = `${h.name.toLowerCase()}|${h.path ?? ""}`;
-			hosts.set(k, [...(hosts.get(k) ?? []), { entry: e, i }]);
+			hosts.set(k, [...(hosts.get(k) ?? []), { entry: e, i, fallback: h.fallback === true }]);
 		});
 	}
-	for (const list of hosts.values()) {
+	for (const all of hosts.values()) {
+		for (const { entry, i } of all.filter((x) => x.fallback)) {
+			if (!all.some((x) => !x.fallback && x.entry !== entry))
+				issue(entry, `hostnames[${i}].fallback`, "Ausweichziel ohne Hauptziel bei einer anderen App", "warning");
+		}
+		const list = all.filter((x) => !x.fallback);
 		const apps = new Set(list.map((x) => x.entry));
 		if (apps.size < 2) continue;
 		for (const { entry, i } of list) {
