@@ -300,6 +300,8 @@ function appBody(body: HTMLElement, r: NetworkResource, env: RenderEnv): void {
 			if (h.path) el(name, "span", { cls: "hv-host-path", text: h.path });
 			const badges = el(l1, "span", "hv-host-badges");
 			entryBadge(badges, h.entry, h.cloudflare, env);
+			if (h.fallback)
+				el(badges, "span", { cls: "hv-badge hv-badge-job", text: "Ausweichziel", title: "Nur wenn das Hauptziel ausfällt (Health-Check in Caddy)" });
 			const l2 = el(row, "div", "hv-host-meta");
 			el(l2, "span", { cls: "hv-host-arrow", text: "→" });
 			if (h.target) copyable(l2, h.target, env, "hv-host-target");

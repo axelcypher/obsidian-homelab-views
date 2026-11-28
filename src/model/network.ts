@@ -1,5 +1,5 @@
 /**
- * Frontmatter key `network-flow`, schema 1 to 5
+ * Frontmatter key `network-flow`, schema 1 to 6
  * (vault: homelab-docs/projects/network-flow/Frontmatter für den Doku-Zustand.md).
  * Schema 3 (network-flow #113): `role` at subnets, `home` and `interfaces` at machines
  * and devices, `addresses[].iface`, `ports` (VLANs of switch ports) at devices.
@@ -60,6 +60,8 @@ export interface Hostname {
 	target?: string;
 	traefik?: string;
 	path?: string;
+	/** schema 6: only a fallback target behind Caddy's health check */
+	fallback?: boolean;
 }
 
 export interface Port {
@@ -194,9 +196,9 @@ export function validateResource(raw: unknown, c: Checker): NetworkResource {
 
 	let schema = 0;
 	if (raw.schema === undefined || raw.schema === null) c.missing("schema");
-	else if (raw.schema === 1 || raw.schema === 2 || raw.schema === 3 || raw.schema === 4 || raw.schema === 5) schema = res.schema = raw.schema;
-	else if (typeof raw.schema === "number") c.error("schema", `Version ${raw.schema} ist unbekannt (bekannt: 1 bis 5)`);
-	else c.wrongType("schema", "eine Zahl von 1 bis 5", raw.schema);
+	else if (raw.schema === 1 || raw.schema === 2 || raw.schema === 3 || raw.schema === 4 || raw.schema === 5 || raw.schema === 6) schema = res.schema = raw.schema;
+	else if (typeof raw.schema === "number") c.error("schema", `Version ${raw.schema} ist unbekannt (bekannt: 1 bis 6)`);
+	else c.wrongType("schema", "eine Zahl von 1 bis 6", raw.schema);
 
 	const kind = c.str(raw, "kind", { required: true, oneOf: NETWORK_KINDS });
 	let known: NetworkKind | undefined;
@@ -341,9 +343,12 @@ function validateApp(raw: Raw, c: Checker, res: NetworkResource, schema: number)
 		hostnames.forEach((h, i) => {
 			const hc = c.child(`hostnames[${i}]`);
 			if (!isObject(h)) return hc.wrongType("", "ein Objekt", h);
-			const allowed = ["name", "entry", "cloudflare", "target", "traefik", "path"];
-			hc.unknownKeys(h, schema === 1 ? allowed.filter((k) => k !== "path") : allowed, {
+			const allowed = ["name", "entry", "cloudflare", "target", "traefik", "path", "fallback"].filter(
+				(k) => !(k === "path" && schema === 1) && !(k === "fallback" && schema !== 0 && schema < 6),
+			);
+			hc.unknownKeys(h, allowed, {
 				path: "path gibt es erst ab schema: 2",
+				fallback: "fallback gibt es erst ab schema: 6",
 			});
 			const name = hc.str(h, "name", { required: true });
 			if (name && !isHostname(name)) hc.error("name", `${show(name)} ist kein gültiger Hostname`);
@@ -360,7 +365,8 @@ function validateApp(raw: Raw, c: Checker, res: NetworkResource, schema: number)
 					path = undefined;
 				}
 			}
-			if (name) res.hostnames?.push({ name, entry, cloudflare, target, traefik, path });
+			const fallback = schema >= 6 ? hc.bool(h, "fallback") === true || undefined : undefined;
+			if (name) res.hostnames?.push({ name, entry, cloudflare, target, traefik, path, ...(fallback ? { fallback } : {}) });
 		});
 	}
 

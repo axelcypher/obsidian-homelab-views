@@ -143,7 +143,7 @@ describe("network-flow: errors", () => {
 		assert.match(find(issuesOf("{schema: 1, kind: device, name: x, type: nas, rack: {name: W, position: 3}}"), "network-flow.rack").message, /erst ab schema: 2/);
 		assert.deepEqual(issuesOf("{schema: 1, kind: device, name: x, type: nas, rack: Wandschrank}"), []);
 		assert.match(find(issuesOf("{schema: 1, kind: rack, name: W, units: 12}"), "network-flow.kind").message, /erst ab schema: 2/);
-		assert.match(find(issuesOf("{schema: 6, kind: site, name: S}"), "network-flow.schema").message, /Version 6 ist unbekannt/);
+		assert.match(find(issuesOf("{schema: 7, kind: site, name: S}"), "network-flow.schema").message, /Version 7 ist unbekannt/);
 	});
 
 	test("rack placement rules", () => {
